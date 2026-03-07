@@ -713,6 +713,59 @@ def users():
     return render_template("users.html", users=all_users)
 
 
+@app.route("/users/<int:user_id>/alterar-senha", methods=["POST"])
+@admin_required
+def user_alterar_senha(user_id: int):
+    user = User.query.get(user_id)
+    if user is None:
+        flash("Usuario nao encontrado.", "danger")
+        return redirect(url_for("users"))
+    nova_senha = request.form.get("nova_senha", "")
+    confirmar = request.form.get("confirmar_senha", "")
+    if not nova_senha or len(nova_senha) < 4:
+        flash("Informe uma nova senha com no minimo 4 caracteres.", "warning")
+        return redirect(url_for("users"))
+    if nova_senha != confirmar:
+        flash("A senha e a confirmacao nao conferem.", "danger")
+        return redirect(url_for("users"))
+    user.set_password(nova_senha)
+    register_action(
+        "CHANGE_PASSWORD",
+        f"Senha do usuario '{user.username}' alterada por admin.",
+        auto_commit=False,
+    )
+    db.session.commit()
+    flash("Senha alterada com sucesso.", "success")
+    return redirect(url_for("users"))
+
+
+@app.route("/users/<int:user_id>/excluir", methods=["POST"])
+@admin_required
+def user_excluir(user_id: int):
+    user = User.query.get(user_id)
+    if user is None:
+        flash("Usuario nao encontrado.", "danger")
+        return redirect(url_for("users"))
+    if user.id == current_user.id:
+        flash("Voce nao pode excluir a si mesmo.", "danger")
+        return redirect(url_for("users"))
+    admins_count = User.query.filter_by(role="admin").count()
+    if user.role == "admin" and admins_count <= 1:
+        flash("Nao e possivel excluir o unico usuario admin.", "danger")
+        return redirect(url_for("users"))
+    username = user.username
+    ActionLog.query.filter_by(user_id=user_id).update({ActionLog.user_id: None})
+    db.session.delete(user)
+    register_action(
+        "DELETE_USER",
+        f"Usuario '{username}' excluido.",
+        auto_commit=False,
+    )
+    db.session.commit()
+    flash("Usuario excluido com sucesso.", "success")
+    return redirect(url_for("users"))
+
+
 @app.route("/turma-nomes", methods=["GET", "POST"])
 @admin_required
 def turma_nomes():

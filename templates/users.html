@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Usuarios - Painel Pedagogico{% endblock %}
 {% block content %}
 <div class="row g-4">
@@ -46,6 +46,7 @@
                             <th>Nome</th>
                             <th>Perfil</th>
                             <th>Criado em</th>
+                            <th class="text-end">Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -60,10 +61,14 @@
                                 </span>
                             </td>
                             <td>{{ user.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#modalAlterarSenha" data-user-id="{{ user.id }}" data-username="{{ user.username }}">Alterar senha</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirUsuario" data-user-id="{{ user.id }}" data-username="{{ user.username }}" {{ 'disabled' if user.id == current_user.id else '' }}>Excluir</button>
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-4">Nenhum usuario cadastrado.</td>
+                            <td colspan="6" class="text-center text-muted py-4">Nenhum usuario cadastrado.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -72,4 +77,84 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="modalAlterarSenha" tabindex="-1" aria-labelledby="modalAlterarSenhaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAlterarSenhaLabel">Alterar senha</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="post" action="" id="formAlterarSenha">
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">Usuario: <strong id="modalAlterarSenhaUsername"></strong></p>
+                    <div class="mb-3">
+                        <label class="form-label" for="nova_senha">Nova senha</label>
+                        <input type="password" class="form-control" id="nova_senha" name="nova_senha" minlength="4" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="confirmar_senha">Confirmar senha</label>
+                        <input type="password" class="form-control" id="confirmar_senha" name="confirmar_senha" minlength="4" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Alterar senha</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalExcluirUsuario" tabindex="-1" aria-labelledby="modalExcluirUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirUsuarioLabel">Excluir usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Tem certeza que deseja excluir o usuario <strong id="modalExcluirUsuarioUsername"></strong>? Esta acao nao pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="" id="formExcluirUsuario" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Excluir usuario</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modalSenha = document.getElementById('modalAlterarSenha');
+    if (modalSenha) {
+        var formSenha = document.getElementById('formAlterarSenha');
+        var labelUsername = document.getElementById('modalAlterarSenhaUsername');
+        modalSenha.addEventListener('show.bs.modal', function (e) {
+            var btn = e.relatedTarget;
+            if (!btn || !formSenha) return;
+            var id = btn.getAttribute('data-user-id');
+            var username = btn.getAttribute('data-username');
+            if (labelUsername) labelUsername.textContent = username || '';
+            formSenha.action = '{{ url_for("user_alterar_senha", user_id=0) }}'.replace('/0/', '/' + id + '/');
+            formSenha.reset();
+        });
+    }
+    var modalExcluir = document.getElementById('modalExcluirUsuario');
+    if (modalExcluir) {
+        var formExcluir = document.getElementById('formExcluirUsuario');
+        var labelExcluir = document.getElementById('modalExcluirUsuarioUsername');
+        modalExcluir.addEventListener('show.bs.modal', function (e) {
+            var btn = e.relatedTarget;
+            if (!btn || !formExcluir) return;
+            var id = btn.getAttribute('data-user-id');
+            var username = btn.getAttribute('data-username');
+            if (labelExcluir) labelExcluir.textContent = username || '';
+            formExcluir.action = '{{ url_for("user_excluir", user_id=0) }}'.replace('/0/', '/' + id + '/');
+        });
+    }
+})();
+</script>
 {% endblock %}

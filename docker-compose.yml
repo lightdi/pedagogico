@@ -1,0 +1,36 @@
+services:
+  pedagogico:
+    build: .
+    container_name: pedagogico
+    restart: always
+
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-altere-em-producao}
+      - APPLICATION_ROOT=/pedagogico
+      - SQLALCHEMY_DATABASE_URI=sqlite:////app/data/pedagogico.db
+      - PROXY_FIX=1
+      - GENERIC_TIMEZONE=America/Fortaleza
+
+    volumes:
+      - pedagogico_data:/app/data
+
+    networks:
+      - proxy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pedagogico.rule=Host(`integramaker.ifpb.edu.br`) && (PathPrefix(`/pedagogico`) || Path(`/pedagogico`))"
+      - "traefik.http.routers.pedagogico.entrypoints=websecure"
+      - "traefik.http.routers.pedagogico.tls=true"
+      - "traefik.http.routers.pedagogico.tls.certresolver=le"
+      - "traefik.http.middlewares.pedagogico-stripprefix.stripprefix.prefixes=/pedagogico"
+      - "traefik.http.routers.pedagogico.middlewares=pedagogico-stripprefix@docker"
+      - "traefik.http.services.pedagogico.loadbalancer.server.port=5000"
+      - "traefik.docker.network=proxy"
+
+volumes:
+  pedagogico_data:
+
+networks:
+  proxy:
+    external: true

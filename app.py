@@ -23,13 +23,33 @@ except ModuleNotFoundError:
     from PyPDF2 import PdfReader
     from PyPDF2.errors import PdfReadError
 from sqlalchemy import UniqueConstraint
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
 app = Flask(__name__)
+if os.environ.get("PROXY_FIX"):
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "troque-esta-chave-em-producao")
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///pedagogico.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "SQLALCHEMY_DATABASE_URI", "sqlite:///pedagogico.db"
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Suporte a subcaminho (ex.: /pedagogico) atras do Traefik com stripprefix
+_application_root = os.environ.get("APPLICATION_ROOT", "").rstrip("/")
+if _application_root:
+
+    class ScriptNameFix:
+        def __init__(self, app, script_name):
+            self.app = app
+            self.script_name = script_name
+
+        def __call__(self, environ, start_response):
+            environ["SCRIPT_NAME"] = self.script_name
+            return self.app(environ, start_response)
+
+    app.wsgi_app = ScriptNameFix(app.wsgi_app, _application_root)
 
 
 db = SQLAlchemy(app)

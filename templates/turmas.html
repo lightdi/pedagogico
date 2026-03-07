@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Turmas - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h1 class="h5 mb-3">Nova turma</h1>
+
+                {% if turma_nomes %}
+                <form method="post" autocomplete="off">
+                    <div class="mb-3">
+                        <label class="form-label" for="turma_nome_id">Nome da turma</label>
+                        <select class="form-select" id="turma_nome_id" name="turma_nome_id" required>
+                            <option value="">Selecione...</option>
+                            {% for item in turma_nomes %}
+                            <option value="{{ item.id }}">{{ item.nome }} - {{ item.periodo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="ano_letivo">Ano letivo</label>
+                        <input type="number" class="form-control" id="ano_letivo" name="ano_letivo" value="{{ ano_atual }}" min="2000" max="2100" required>
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Cadastrar turma</button>
+                </form>
+                {% else %}
+                <div class="alert alert-warning mb-0">
+                    Cadastre primeiro um nome de turma para depois criar as turmas por ano letivo.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <strong>Turmas cadastradas</strong>
+                <label class="d-flex align-items-center gap-2 mb-0 small">
+                    <span class="text-muted">Filtrar por ano:</span>
+                    <select class="form-select form-select-sm" id="turmas-filtro-ano" style="width: auto; min-width: 6rem;" aria-label="Ano letivo">
+                        <option value="" {{ 'selected' if ano_filtro is none else '' }}>Todos</option>
+                        {% for a in anos_turmas %}
+                        <option value="{{ a }}" {{ 'selected' if ano_filtro == a else '' }}>{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome da turma</th>
+                            <th>Periodo</th>
+                            <th>Ano letivo</th>
+                            <th>Criado em</th>
+                            <th class="text-end">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for turma in turmas %}
+                        <tr>
+                            <td>{{ turma.id }}</td>
+                            <td>{{ turma.turma_nome.nome }}</td>
+                            <td>{{ turma.turma_nome.periodo }}</td>
+                            <td>{{ turma.ano_letivo }}</td>
+                            <td>{{ turma.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#modalAlterarTurma" data-turma-id="{{ turma.id }}" data-turma-nome-id="{{ turma.turma_nome_id }}" data-turma-ano="{{ turma.ano_letivo }}" data-turma-label="{{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})">Alterar</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirTurma" data-turma-url="{{ url_for('excluir_turma', turma_id=turma.id) }}" data-turma-label="{{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})">Excluir</button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">{{ 'Nenhuma turma neste ano.' if ano_filtro is not none else 'Nenhuma turma cadastrada.' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAlterarTurma" tabindex="-1" aria-labelledby="modalAlterarTurmaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAlterarTurmaLabel">Alterar turma</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formAlterarTurma" method="post" action="">
+                <div class="modal-body">
+                    <p class="small text-muted mb-3">Alterando: <strong id="modalAlterarTurmaLabelNome"></strong></p>
+                    <div class="mb-3">
+                        <label class="form-label" for="alterar_turma_nome_id">Nome da turma</label>
+                        <select class="form-select" id="alterar_turma_nome_id" name="turma_nome_id" required>
+                            {% for item in turma_nomes %}
+                            <option value="{{ item.id }}">{{ item.nome }} - {{ item.periodo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="alterar_ano_letivo">Ano letivo</label>
+                        <input type="number" class="form-control" id="alterar_ano_letivo" name="ano_letivo" min="2000" max="2100" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalExcluirTurma" tabindex="-1" aria-labelledby="modalExcluirTurmaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirTurmaLabel">Excluir turma</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Tem certeza que deseja excluir a turma <strong id="modalExcluirTurmaLabelNome"></strong>? Todos os boletins desta turma serao excluidos. Esta acao nao pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluirTurma" method="post" action="" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Excluir turma</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modalExcluir = document.getElementById('modalExcluirTurma');
+    if (modalExcluir) {
+        var formExcluir = document.getElementById('formExcluirTurma');
+        var labelNomeExcluir = document.getElementById('modalExcluirTurmaLabelNome');
+        modalExcluir.addEventListener('show.bs.modal', function (event) {
+            var btn = event.relatedTarget;
+            if (!btn) return;
+            var url = btn.getAttribute('data-turma-url');
+            var label = btn.getAttribute('data-turma-label');
+            if (labelNomeExcluir) labelNomeExcluir.textContent = label || '';
+            if (formExcluir && url) formExcluir.action = url;
+        });
+    }
+    var modalAlterar = document.getElementById('modalAlterarTurma');
+    if (modalAlterar) {
+        var formAlterar = document.getElementById('formAlterarTurma');
+        var labelNomeAlterar = document.getElementById('modalAlterarTurmaLabelNome');
+        var selectNome = document.getElementById('alterar_turma_nome_id');
+        var inputAno = document.getElementById('alterar_ano_letivo');
+        modalAlterar.addEventListener('show.bs.modal', function (event) {
+            var btn = event.relatedTarget;
+            if (!btn || !formAlterar) return;
+            var turmaId = btn.getAttribute('data-turma-id');
+            var nomeId = btn.getAttribute('data-turma-nome-id');
+            var ano = btn.getAttribute('data-turma-ano');
+            var label = btn.getAttribute('data-turma-label');
+            if (labelNomeAlterar) labelNomeAlterar.textContent = label || '';
+            formAlterar.action = '{{ url_for("alterar_turma", turma_id=0) }}'.replace('/0/', '/' + turmaId + '/');
+            if (selectNome) selectNome.value = nomeId || '';
+            if (inputAno) inputAno.value = ano || '';
+        });
+    }
+    var filtroAno = document.getElementById('turmas-filtro-ano');
+    if (filtroAno) filtroAno.addEventListener('change', function () {
+        var ano = this.value;
+        var url = ano ? '{{ url_for("turmas") }}?ano=' + encodeURIComponent(ano) : '{{ url_for("turmas") }}';
+        window.location = url;
+    });
+})();
+</script>
+{% endblock %}

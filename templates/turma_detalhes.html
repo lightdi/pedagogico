@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Detalhes da turma - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('dashboard') }}?ano={{ turma.ano_letivo }}" class="btn btn-sm btn-outline-secondary mb-2">&larr; Voltar ao dashboard</a>
+        <h1 class="h3 mb-0">{{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})</h1>
+        <p class="text-muted small mb-0">Detalhamento de alunos e notas por bimestre</p>
+    </div>
+</div>
+
+{% for item in boletins %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+            <strong>{{ item.aluno.nome }}</strong>
+            <span class="text-muted small ms-2">Matricula {{ item.aluno_matricula }}</span>
+        </div>
+        {% if item.disciplinas %}
+        <a href="{{ url_for('aluno_grafico', turma_id=turma.id, matricula=item.aluno_matricula) }}" class="btn btn-sm btn-outline-secondary">Grafico</a>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if item.disciplinas %}
+        <div class="table-responsive">
+            <table class="table table-striped table-sm mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Disciplina</th>
+                        <th>Freq.%</th>
+                        <th>M1 / F1</th>
+                        <th>M2 / F2</th>
+                        <th>M3 / F3</th>
+                        <th>M4 / F4</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for disc in item.disciplinas %}
+                    <tr>
+                        <td>{{ disc.nome_disciplina }}</td>
+                        <td>{{ "%.0f"|format(disc.frequencia_percent) if disc.frequencia_percent is not none else "-" }}{% if disc.frequencia_percent is not none %}%{% endif %}</td>
+                        <td class="{{ 'table-danger' if disc.nota_b1 < 40 else ('table-warning' if disc.nota_b1 < 70 else '') }}">{{ "%.2f"|format(disc.nota_b1) }} / {{ disc.falta_b1 }}</td>
+                        <td class="{{ 'table-danger' if disc.nota_b2 < 40 else ('table-warning' if disc.nota_b2 < 70 else '') }}">{{ "%.2f"|format(disc.nota_b2) }} / {{ disc.falta_b2 }}</td>
+                        <td class="{{ 'table-danger' if disc.nota_b3 < 40 else ('table-warning' if disc.nota_b3 < 70 else '') }}">{{ "%.2f"|format(disc.nota_b3) }} / {{ disc.falta_b3 }}</td>
+                        <td class="{{ 'table-danger' if disc.nota_b4 < 40 else ('table-warning' if disc.nota_b4 < 70 else '') }}">{{ "%.2f"|format(disc.nota_b4) }} / {{ disc.falta_b4 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="small text-muted px-3 pb-3 mb-0">Nenhuma disciplina importada para este aluno.</p>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body py-5 text-center text-muted">
+        Nenhum boletim nesta turma.
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

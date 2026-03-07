@@ -1,0 +1,75 @@
+﻿{% extends "base.html" %}
+{% block title %}Usuarios - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h1 class="h5 mb-3">Novo usuario</h1>
+                <form method="post" autocomplete="off">
+                    <div class="mb-3">
+                        <label class="form-label" for="username">Usuario</label>
+                        <input class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="full_name">Nome completo</label>
+                        <input class="form-control" id="full_name" name="full_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="password">Senha</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="role">Perfil</label>
+                        <select class="form-select" id="role" name="role">
+                            <option value="user">Usuario</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Cadastrar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <strong>Usuarios cadastrados</strong>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Usuario</th>
+                            <th>Nome</th>
+                            <th>Perfil</th>
+                            <th>Criado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.full_name }}</td>
+                            <td>
+                                <span class="badge {{ 'text-bg-danger' if user.role == 'admin' else 'text-bg-secondary' }}">
+                                    {{ user.role }}
+                                </span>
+                            </td>
+                            <td>{{ user.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">Nenhum usuario cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

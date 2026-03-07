@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Importar Boletim - Painel Pedagogico{% endblock %}
+{% block content %}
+<div id="loading-overlay" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center" style="background: rgba(255,255,255,0.85); z-index: 1050;">
+    <div class="text-center">
+        <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <p class="text-muted mb-0 fw-medium">Carregando...</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h1 class="h5 mb-3">1) Carregar para conferencia</h1>
+                <p class="small text-muted mb-3">Os alunos e boletins serao <strong>adicionados</strong> à turma selecionada. Nenhuma turma nova e criada.</p>
+
+                {% if turmas or anos_disponiveis %}
+                {% if anos_disponiveis %}
+                <div class="mb-3">
+                    <label class="form-label" for="filtro_ano">Filtrar por ano</label>
+                    <select class="form-select" id="filtro_ano" name="filtro_ano">
+                        <option value="">Todos os anos</option>
+                        {% for a in anos_disponiveis %}
+                        <option value="{{ a }}" {{ 'selected' if ano_filtro == a else '' }}>{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                {% if turmas %}
+                <form method="post" enctype="multipart/form-data" autocomplete="off" class="mb-4" id="form-carregar">
+                    <input type="hidden" name="acao" value="carregar">
+                    <div class="mb-3">
+                        <label class="form-label" for="turma_id">Turma (os dados serao adicionados a esta turma)</label>
+                        <select class="form-select" id="turma_id" name="turma_id" required>
+                            {% for turma in turmas %}
+                            <option value="{{ turma.id }}" {{ 'selected' if turma.id == selected_turma_id else '' }}>
+                                {{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="arquivo_pdf">Arquivo PDF</label>
+                        <input type="file" class="form-control" id="arquivo_pdf" name="arquivo_pdf" accept="application/pdf" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Carregar para conferencia</button>
+                </form>
+
+                <hr>
+
+                <h2 class="h6 mb-3">2) Importar dados conferidos</h2>
+                <p class="small text-muted mb-2">Os alunos da conferencia abaixo serao adicionados à turma que voce selecionou no passo 1.</p>
+                {% if preview_id %}
+                <form method="post" autocomplete="off" id="form-importar">
+                    <input type="hidden" name="acao" value="importar_conferencia">
+                    <input type="hidden" name="preview_id" value="{{ preview_id }}">
+                    <button type="submit" class="btn btn-success w-100">Importar conferencia</button>
+                </form>
+                <p class="small text-muted mt-2 mb-0">
+                    Arquivo em conferencia: <strong>{{ preview_arquivo_nome }}</strong>
+                </p>
+                {% else %}
+                <div class="alert alert-warning mb-0">
+                    Nenhuma conferencia carregada.
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-warning mb-0">
+                    {% if ano_filtro %}Nenhuma turma no ano {{ ano_filtro }}.{% else %}Cadastre uma turma antes de importar.{% endif %}
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="alert alert-warning mb-0">
+                    Cadastre uma turma antes de importar.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Conferencia (dados do PDF)</strong>
+                {% if preview_rows %}<span class="badge text-bg-secondary">{{ preview_rows|length }} alunos</span>{% endif %}
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Matricula</th>
+                            <th>Aluno</th>
+                            <th>M1 / F1</th>
+                            <th>M2 / F2</th>
+                            <th>M3 / F3</th>
+                            <th>M4 / F4</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in preview_rows %}
+                        <tr>
+                            <td>{{ item.matricula }}</td>
+                            <td>{{ item.nome }}</td>
+                            <td>{{ "%.2f"|format(item.media_primeiro_bimestre) }} / {{ item.falta_primeiro_bimestre }}</td>
+                            <td>{{ "%.2f"|format(item.media_segundo_bimestre) }} / {{ item.falta_segundo_bimestre }}</td>
+                            <td>{{ "%.2f"|format(item.media_terceiro_bimestre) }} / {{ item.falta_terceiro_bimestre }}</td>
+                            <td>{{ "%.2f"|format(item.media_quarto_bimestre) }} / {{ item.falta_quarto_bimestre }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">Carregue um PDF para visualizar a conferencia antes de importar.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if preview_rows and preview_rows[0].get('disciplinas') %}
+            <div class="card-body border-top bg-light">
+                <p class="small text-muted mb-2">As notas e a frequencia de cada disciplina serao importadas. Amostra ({{ preview_rows[0].nome }}):</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>Disciplina</th>
+                                <th>Freq.%</th>
+                                <th>M1 / F1</th>
+                                <th>M2 / F2</th>
+                                <th>M3 / F3</th>
+                                <th>M4 / F4</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in preview_rows[0].disciplinas %}
+                            <tr>
+                                <td>{{ d.nome_disciplina }}</td>
+                                <td>{{ "%.0f"|format(d.frequencia_percent) if d.frequencia_percent is not none else "-" }}{% if d.frequencia_percent is not none %}%{% endif %}</td>
+                                <td>{{ "%.2f"|format(d.nota_b1) }} / {{ d.falta_b1 }}</td>
+                                <td>{{ "%.2f"|format(d.nota_b2) }} / {{ d.falta_b2 }}</td>
+                                <td>{{ "%.2f"|format(d.nota_b3) }} / {{ d.falta_b3 }}</td>
+                                <td>{{ "%.2f"|format(d.nota_b4) }} / {{ d.falta_b4 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <strong>Ja importado na turma selecionada</strong>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Matricula</th>
+                            <th>Aluno</th>
+                            <th>M1 / F1</th>
+                            <th>M2 / F2</th>
+                            <th>M3 / F3</th>
+                            <th>M4 / F4</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in registros %}
+                        {% set resumo = item.resumo_bimestres() %}
+                        <tr>
+                            <td>{{ item.aluno_matricula }}</td>
+                            <td>{{ item.aluno.nome }}</td>
+                            <td>{{ "%.2f"|format(resumo.media_b1) }} / {{ resumo.falta_b1 }}</td>
+                            <td>{{ "%.2f"|format(resumo.media_b2) }} / {{ resumo.falta_b2 }}</td>
+                            <td>{{ "%.2f"|format(resumo.media_b3) }} / {{ resumo.falta_b3 }}</td>
+                            <td>{{ "%.2f"|format(resumo.media_b4) }} / {{ resumo.falta_b4 }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">Nenhum boletim importado para esta turma.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="importar-config">{{ {"baseUrl": url_for("importar_boletim"), "anoFiltro": ano_filtro} | tojson }}</script>
+<script>
+(function () {
+    var config = JSON.parse(document.getElementById('importar-config').textContent);
+    var baseUrl = config.baseUrl;
+    var anoFiltro = config.anoFiltro;
+    function buildParams(turmaId, ano) {
+        var p = [];
+        if (turmaId != null && turmaId !== '') p.push('turma_id=' + encodeURIComponent(turmaId));
+        if (ano != null && ano !== '') p.push('ano=' + encodeURIComponent(ano));
+        return p.length ? '?' + p.join('&') : '';
+    }
+
+    var overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        function showLoading() {
+            overlay.classList.remove('d-none');
+            overlay.classList.add('d-flex');
+        }
+        var formCarregar = document.getElementById('form-carregar');
+        var formImportar = document.getElementById('form-importar');
+        if (formCarregar) formCarregar.addEventListener('submit', showLoading);
+        if (formImportar) formImportar.addEventListener('submit', showLoading);
+    }
+
+    var selectTurma = document.getElementById('turma_id');
+    if (selectTurma) {
+        selectTurma.addEventListener('change', function () {
+            var turmaId = this.value;
+            if (turmaId) {
+                window.location = baseUrl + buildParams(turmaId, anoFiltro);
+            }
+        });
+    }
+
+    var filtroAno = document.getElementById('filtro_ano');
+    if (filtroAno) {
+        filtroAno.addEventListener('change', function () {
+            var ano = this.value || null;
+            var turmaId = selectTurma && selectTurma.value ? selectTurma.value : null;
+            window.location = baseUrl + buildParams(turmaId, ano);
+        });
+    }
+})();
+</script>
+{% endblock %}

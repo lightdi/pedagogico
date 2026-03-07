@@ -1,0 +1,74 @@
+﻿:root {
+    --ifpb-green: #00843d;
+    --ifpb-green-dark: #006633;
+    --ifpb-green-soft: #e8f4ee;
+    --ifpb-red: #c8102e;
+    --ifpb-red-dark: #a60d25;
+}
+
+body {
+    background: linear-gradient(180deg, #f8fbf9 0%, #f1f7f3 100%);
+}
+
+.navbar {
+    background: linear-gradient(90deg, var(--ifpb-green-dark) 0%, var(--ifpb-green) 100%) !important;
+    border-bottom: 4px solid var(--ifpb-red);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.btn-primary {
+    background-color: var(--ifpb-green);
+    border-color: var(--ifpb-green);
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: var(--ifpb-green-dark) !important;
+    border-color: var(--ifpb-green-dark) !important;
+}
+
+.btn-warning {
+    background-color: var(--ifpb-red);
+    border-color: var(--ifpb-red);
+    color: #fff;
+}
+
+.btn-warning:hover,
+.btn-warning:focus,
+.btn-warning:active {
+    background-color: var(--ifpb-red-dark) !important;
+    border-color: var(--ifpb-red-dark) !important;
+    color: #fff !important;
+}
+
+.card {
+    border-radius: 0.9rem;
+}
+
+.card-header {
+    background-color: var(--ifpb-green-soft) !important;
+    border-bottom: 1px solid #d4e7db;
+    color: var(--ifpb-green-dark);
+}
+
+.table thead th {
+    background-color: #f0f7f3;
+    color: var(--ifpb-green-dark);
+}
+
+.badge.text-bg-secondary {
+    background-color: var(--ifpb-red) !important;
+}
+
+a {
+    color: var(--ifpb-green-dark);
+}
+
+a:hover {
+    color: var(--ifpb-green);
+}

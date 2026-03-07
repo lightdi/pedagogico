@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Nomes de Turma - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h1 class="h5 mb-3">Novo nome de turma</h1>
+                <form method="post" autocomplete="off">
+                    <div class="mb-3">
+                        <label class="form-label" for="nome">Nome da turma</label>
+                        <input class="form-control" id="nome" name="nome" placeholder="Ex.: Informatica" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="periodo">Serie</label>
+                        <select class="form-select" id="periodo" name="periodo" required>
+                            <option value="">Selecione...</option>
+                            {% for option in periodo_options %}
+                            <option value="{{ option }}">{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Cadastrar nome</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <strong>Nomes de turma cadastrados</strong>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Serie</th>
+                            <th>Criado em</th>
+                            <th class="text-end">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in turma_nomes %}
+                        <tr>
+                            <td>{{ item.id }}</td>
+                            <td>{{ item.nome }}</td>
+                            <td>{{ item.periodo }}</td>
+                            <td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-primary me-1" data-bs-toggle="modal" data-bs-target="#modalAlterarTurmaNome" data-alterar-url="{{ url_for('alterar_turma_nome', turma_nome_id=item.id) }}" data-nome="{{ item.nome }}" data-periodo="{{ item.periodo }}">Alterar</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirTurmaNome" data-turma-nome-url="{{ url_for('excluir_turma_nome', turma_nome_id=item.id) }}" data-turma-nome-label="{{ item.nome }} ({{ item.periodo }})">Excluir</button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">Nenhum nome de turma cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAlterarTurmaNome" tabindex="-1" aria-labelledby="modalAlterarTurmaNomeLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAlterarTurmaNomeLabel">Alterar nome de turma</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formAlterarTurmaNome" method="post" action="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="alterar_nome">Nome da turma</label>
+                        <input type="text" class="form-control" id="alterar_nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="alterar_periodo">Serie</label>
+                        <select class="form-select" id="alterar_periodo" name="periodo" required>
+                            {% for option in periodo_options %}
+                            <option value="{{ option }}">{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalExcluirTurmaNome" tabindex="-1" aria-labelledby="modalExcluirTurmaNomeLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirTurmaNomeLabel">Excluir nome de turma</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Tem certeza que deseja excluir o nome de turma <strong id="modalExcluirTurmaNomeLabelTexto"></strong>? So e possivel excluir se nao houver turmas vinculadas. Esta acao nao pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluirTurmaNome" method="post" action="" class="d-inline">
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var modalAlterar = document.getElementById('modalAlterarTurmaNome');
+    var formAlterar = document.getElementById('formAlterarTurmaNome');
+    var inputNome = document.getElementById('alterar_nome');
+    var inputPeriodo = document.getElementById('alterar_periodo');
+    if (modalAlterar) {
+        modalAlterar.addEventListener('show.bs.modal', function (event) {
+            var btn = event.relatedTarget;
+            if (!btn) return;
+            var url = btn.getAttribute('data-alterar-url');
+            var nome = btn.getAttribute('data-nome') || '';
+            var periodo = btn.getAttribute('data-periodo') || '';
+            if (formAlterar && url) formAlterar.action = url;
+            if (inputNome) inputNome.value = nome;
+            if (inputPeriodo) inputPeriodo.value = periodo;
+        });
+    }
+
+    var modalExcluir = document.getElementById('modalExcluirTurmaNome');
+    var formExcluir = document.getElementById('formExcluirTurmaNome');
+    var labelExcluir = document.getElementById('modalExcluirTurmaNomeLabelTexto');
+    if (modalExcluir) {
+        modalExcluir.addEventListener('show.bs.modal', function (event) {
+            var btn = event.relatedTarget;
+            if (!btn) return;
+            var url = btn.getAttribute('data-turma-nome-url');
+            var label = btn.getAttribute('data-turma-nome-label');
+            if (labelExcluir) labelExcluir.textContent = label || '';
+            if (formExcluir && url) formExcluir.action = url;
+        });
+    }
+})();
+</script>
+{% endblock %}

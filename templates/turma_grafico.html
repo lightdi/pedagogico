@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Grafico - {{ turma.turma_nome.nome }} - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('dashboard') }}?ano={{ turma.ano_letivo }}" class="btn btn-sm btn-outline-secondary mb-2">&larr; Voltar ao dashboard</a>
+        <h1 class="h3 mb-0">Graficos de notas por disciplina</h1>
+        <p class="text-muted small mb-0">{{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})</p>
+    </div>
+</div>
+
+{% for item in chart_data_por_disciplina %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white">
+        <strong>{{ item.disciplina }}</strong>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-2">Eixo Y: nota (0 a 100). Eixo X: aluno. Barras: B1, B2, B3, B4.</p>
+        <div class="position-relative" style="height: 380px;">
+            <canvas id="chart-{{ loop.index0 }}"></canvas>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body py-5 text-center text-muted">
+        Nenhuma disciplina com dados. Importe boletins da turma.
+    </div>
+</div>
+{% endfor %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="application/json" id="chart-data-por-disciplina">{{ chart_data_por_disciplina | tojson }}</script>
+<script>
+(function () {
+    var list = JSON.parse(document.getElementById('chart-data-por-disciplina').textContent || '[]');
+    var colors = [
+        { bg: 'rgba(54, 162, 235, 0.7)', border: 'rgb(54, 162, 235)' },
+        { bg: 'rgba(75, 192, 192, 0.7)', border: 'rgb(75, 192, 192)' },
+        { bg: 'rgba(255, 206, 86, 0.7)', border: 'rgb(255, 206, 86)' },
+        { bg: 'rgba(153, 102, 255, 0.7)', border: 'rgb(153, 102, 255)' }
+    ];
+    list.forEach(function (item, idx) {
+        var canvas = document.getElementById('chart-' + idx);
+        if (!canvas) return;
+        var alunos = item.alunos || [];
+        if (!alunos.length) {
+            canvas.parentElement.innerHTML = '<p class="text-muted text-center py-4">Nenhum dado.</p>';
+            return;
+        }
+        var labels = alunos.map(function (d) { return d.aluno; });
+        new Chart(canvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'B1', data: alunos.map(function (d) { return d.b1; }), backgroundColor: colors[0].bg, borderColor: colors[0].border, borderWidth: 1 },
+                    { label: 'B2', data: alunos.map(function (d) { return d.b2; }), backgroundColor: colors[1].bg, borderColor: colors[1].border, borderWidth: 1 },
+                    { label: 'B3', data: alunos.map(function (d) { return d.b3; }), backgroundColor: colors[2].bg, borderColor: colors[2].border, borderWidth: 1 },
+                    { label: 'B4', data: alunos.map(function (d) { return d.b4; }), backgroundColor: colors[3].bg, borderColor: colors[3].border, borderWidth: 1 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Nota' } },
+                    x: { title: { display: true, text: 'Aluno' } }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2); } } }
+                }
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

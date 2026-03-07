@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Grafico - {{ aluno_nome }} - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('turma_detalhes', turma_id=turma.id) }}" class="btn btn-sm btn-outline-secondary mb-2">&larr; Voltar aos detalhes da turma</a>
+        <h1 class="h3 mb-0">Grafico de notas por disciplina</h1>
+        <p class="text-muted small mb-0">{{ aluno_nome }} (Matricula {{ matricula }}) &middot; {{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})</p>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <p class="small text-muted mb-3">Eixo Y: nota (0 a 100). Eixo X: bimestre. Uma linha por disciplina.</p>
+        <div class="position-relative" style="height: 450px;">
+            <canvas id="chartAluno"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="application/json" id="aluno-chart-data">{{ disciplinas_data | tojson }}</script>
+<script>
+(function () {
+    var disciplinas = JSON.parse(document.getElementById('aluno-chart-data').textContent || '[]');
+    if (!disciplinas.length) {
+        document.getElementById('chartAluno').parentElement.innerHTML = '<p class="text-muted text-center py-5">Nenhuma disciplina com dados.</p>';
+        return;
+    }
+    var labels = ['B1', 'B2', 'B3', 'B4'];
+    function corDistinta(i) {
+        var anguloDourado = 137.5;
+        var h = (i * anguloDourado) % 360;
+        var s = 60 + (i % 3) * 15;
+        var l = 45 + (i % 2) * 10;
+        return 'hsl(' + Math.round(h) + ', ' + s + '%, ' + l + '%)';
+    }
+    var datasets = disciplinas.map(function (d, i) {
+        var cor = corDistinta(i);
+        return {
+            label: d.nome,
+            data: [d.b1, d.b2, d.b3, d.b4],
+            borderColor: cor,
+            backgroundColor: cor,
+            tension: 0.2,
+            fill: false
+        };
+    });
+    new Chart(document.getElementById('chartAluno').getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Nota' }
+                },
+                x: {
+                    title: { display: true, text: 'Bimestre' }
+                }
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2); } } }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Avaliacao B{{ num_bimestre }} - {{ turma.turma_nome.nome }} - Painel Pedagogico{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{{ url_for('dashboard') }}?ano={{ turma.ano_letivo }}" class="btn btn-sm btn-outline-secondary mb-2">&larr; Voltar ao dashboard</a>
+        <h1 class="h3 mb-0">Avaliacao do B{{ num_bimestre }}</h1>
+        <p class="text-muted small mb-0">{{ turma.turma_nome.nome }} - {{ turma.turma_nome.periodo }} ({{ turma.ano_letivo }})</p>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white">
+        <strong>Alunos com nota &lt; 70 no B{{ num_bimestre }}</strong>
+        <span class="badge text-bg-warning">Ordenado: quem tem mais disciplinas abaixo de 70 primeiro</span>
+    </div>
+    <div class="card-body p-0">
+        {% if alunos_abaixo_70 %}
+        <ul class="list-group list-group-flush">
+            {% for boletim, count_70, count_40 in alunos_abaixo_70 %}
+            <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>{{ boletim.aluno.nome }}</span>
+                <span>
+                    <span class="badge text-bg-warning rounded-pill me-1">{{ count_70 }} &lt; 70</span>
+                    <span class="badge text-bg-danger rounded-pill">{{ count_40 }} &lt; 40</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted text-center py-4 mb-0">Nenhum aluno com nota abaixo de 70 neste bimestre.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="d-flex align-items-center flex-wrap gap-3 mb-3">
+    <h2 class="h5 mb-0">Grafico por aluno (bimestres 1 a {{ num_bimestre }})</h2>
+    <div class="d-flex align-items-center gap-2">
+        <span class="small text-muted">Filtrar alunos:</span>
+        <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="filtro-alunos" id="filtro-todos" value="todos" checked>
+            <label class="btn btn-outline-secondary" for="filtro-todos">Todos</label>
+            <input type="radio" class="btn-check" name="filtro-alunos" id="filtro-70" value="abaixo_70">
+            <label class="btn btn-outline-warning" for="filtro-70">Abaixo de 70</label>
+            <input type="radio" class="btn-check" name="filtro-alunos" id="filtro-40" value="abaixo_40">
+            <label class="btn btn-outline-danger" for="filtro-40">Abaixo de 40</label>
+        </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <span class="small text-muted">Linhas no grafico:</span>
+        <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="filtro-linhas" id="linhas-todas" value="todas" checked>
+            <label class="btn btn-outline-secondary" for="linhas-todas">Todas</label>
+            <input type="radio" class="btn-check" name="filtro-linhas" id="linhas-70" value="abaixo_70">
+            <label class="btn btn-outline-warning" for="linhas-70">Abaixo de 70</label>
+            <input type="radio" class="btn-check" name="filtro-linhas" id="linhas-40" value="abaixo_40">
+            <label class="btn btn-outline-danger" for="linhas-40">Abaixo de 40</label>
+        </div>
+    </div>
+</div>
+{% for item in chart_por_aluno %}
+<div class="card border-0 shadow-sm mb-4 card-grafico-aluno" data-abaixo-70="{{ 'true' if item.tem_abaixo_70 else 'false' }}" data-abaixo-40="{{ 'true' if item.tem_abaixo_40 else 'false' }}">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <strong>{{ item.aluno_nome }}</strong>
+        <span>
+            <span class="badge text-bg-warning text-decoration-none me-1">{{ item.disciplinas | selectattr('abaixo_70') | list | length }} &lt; 70</span>
+            <span class="badge text-bg-danger text-decoration-none">{{ item.disciplinas | selectattr('abaixo_40') | list | length }} &lt; 40</span>
+        </span>
+        <span class="text-muted small">Matricula {{ item.matricula }}</span>
+    </div>
+    <div class="card-body">
+        <div class="position-relative" style="height: 320px;">
+            <canvas id="chart-av-{{ loop.index0 }}"></canvas>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="application/json" id="labels-bimestres">{{ labels_bimestres | tojson }}</script>
+<script type="application/json" id="chart-por-aluno">{{ chart_por_aluno | tojson }}</script>
+<script>
+(function () {
+    var labels = JSON.parse(document.getElementById('labels-bimestres').textContent || '[]');
+    var list = JSON.parse(document.getElementById('chart-por-aluno').textContent || '[]');
+    var chartInstances = [];
+    function corDistinta(i) {
+        var h = (i * 137.5) % 360;
+        var s = 60 + (i % 3) * 15;
+        var l = 45 + (i % 2) * 10;
+        return 'hsl(' + Math.round(h) + ', ' + s + '%, ' + l + '%)';
+    }
+    list.forEach(function (item, idx) {
+        var canvas = document.getElementById('chart-av-' + idx);
+        if (!canvas || !item.disciplinas || !item.disciplinas.length) return;
+        var datasets = item.disciplinas.map(function (d, i) {
+            var cor = corDistinta(i);
+            return {
+                label: d.nome,
+                data: d.notas,
+                borderColor: cor,
+                backgroundColor: cor,
+                tension: 0.2,
+                fill: false,
+                _abaixo_70: !!d.abaixo_70,
+                _abaixo_40: !!d.abaixo_40
+            };
+        });
+        var ch = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Nota' } },
+                    x: { title: { display: true, text: 'Bimestre' } }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2); } } }
+                }
+            }
+        });
+        chartInstances.push(ch);
+    });
+
+    function aplicaFiltroAlunos() {
+        var v = document.querySelector('input[name="filtro-alunos"]:checked');
+        var valor = v ? v.value : 'todos';
+        document.querySelectorAll('.card-grafico-aluno').forEach(function (card) {
+            var abaixo70 = card.getAttribute('data-abaixo-70') === 'true';
+            var abaixo40 = card.getAttribute('data-abaixo-40') === 'true';
+            var mostrar = valor === 'todos' || (valor === 'abaixo_70' && abaixo70) || (valor === 'abaixo_40' && abaixo40);
+            card.style.display = mostrar ? '' : 'none';
+        });
+    }
+    function aplicaFiltroLinhas() {
+        var v = document.querySelector('input[name="filtro-linhas"]:checked');
+        var valor = v ? v.value : 'todas';
+        chartInstances.forEach(function (ch) {
+            if (!ch.data || !ch.data.datasets) return;
+            ch.data.datasets.forEach(function (ds) {
+                if (valor === 'todas') ds.hidden = false;
+                else if (valor === 'abaixo_70') ds.hidden = !ds._abaixo_70;
+                else if (valor === 'abaixo_40') ds.hidden = !ds._abaixo_40;
+            });
+            ch.update();
+        });
+    }
+    document.querySelectorAll('input[name="filtro-alunos"]').forEach(function (el) {
+        el.addEventListener('change', aplicaFiltroAlunos);
+    });
+    document.querySelectorAll('input[name="filtro-linhas"]').forEach(function (el) {
+        el.addEventListener('change', aplicaFiltroLinhas);
+    });
+    aplicaFiltroAlunos();
+})();
+</script>
+{% endblock %}

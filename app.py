@@ -58,7 +58,7 @@ login_manager.login_view = "login"
 login_manager.login_message = "Faca login para acessar o sistema."
 login_manager.login_message_category = "warning"
 
-PERIODO_OPTIONS = ("1o ano", "2o ano", "3o ano")
+PERIODO_OPTIONS = ("1º ano", "2º ano", "3º ano")
 
 
 @app.context_processor
@@ -778,7 +778,7 @@ def turma_nomes():
             return redirect(url_for("turma_nomes"))
 
         if periodo not in PERIODO_OPTIONS:
-            flash("Serie invalida. Use 1o, 2o ou 3o ano.", "danger")
+            flash("Serie invalida. Use 1º, 2º ou 3º ano.", "danger")
             return redirect(url_for("turma_nomes"))
 
         exists = TurmaNome.query.filter_by(nome=nome, periodo=periodo).first()
@@ -823,7 +823,7 @@ def alterar_turma_nome(turma_nome_id: int):
         return redirect(url_for("turma_nomes"))
 
     if periodo not in PERIODO_OPTIONS:
-        flash("Serie invalida. Use 1o, 2o ou 3o ano.", "danger")
+        flash("Serie invalida. Use 1º, 2º ou 3º ano.", "danger")
         return redirect(url_for("turma_nomes"))
 
     exists = TurmaNome.query.filter(

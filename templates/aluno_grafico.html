@@ -11,7 +11,15 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-body">
-        <p class="small text-muted mb-3">Eixo Y: nota (0 a 100). Eixo X: bimestre. Uma linha por disciplina.</p>
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+            <span class="small text-muted">Exibir no grafico:</span>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcar-todos">Marcar todos</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-desmarcar-todos">Desmarcar todos</button>
+            </div>
+            <div class="d-flex flex-wrap gap-2 gap-md-3" id="disciplinas-checkboxes"></div>
+        </div>
+        <p class="small text-muted mb-3">Eixo Y: nota (0 a 100). Eixo X: bimestre. Apenas as disciplinas marcadas aparecem no grafico.</p>
         <div class="position-relative" style="height: 450px;">
             <canvas id="chartAluno"></canvas>
         </div>
@@ -23,14 +31,14 @@
 <script>
 (function () {
     var disciplinas = JSON.parse(document.getElementById('aluno-chart-data').textContent || '[]');
+    var container = document.getElementById('chartAluno').parentElement;
     if (!disciplinas.length) {
-        document.getElementById('chartAluno').parentElement.innerHTML = '<p class="text-muted text-center py-5">Nenhuma disciplina com dados.</p>';
+        container.innerHTML = '<p class="text-muted text-center py-5">Nenhuma disciplina com dados.</p>';
         return;
     }
     var labels = ['B1', 'B2', 'B3', 'B4'];
     function corDistinta(i) {
-        var anguloDourado = 137.5;
-        var h = (i * anguloDourado) % 360;
+        var h = (i * 137.5) % 360;
         var s = 60 + (i % 3) * 15;
         var l = 45 + (i % 2) * 10;
         return 'hsl(' + Math.round(h) + ', ' + s + '%, ' + l + '%)';
@@ -46,7 +54,8 @@
             fill: false
         };
     });
-    new Chart(document.getElementById('chartAluno').getContext('2d'), {
+
+    var chart = new Chart(document.getElementById('chartAluno').getContext('2d'), {
         type: 'line',
         data: { labels: labels, datasets: datasets },
         options: {
@@ -67,6 +76,47 @@
                 tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2); } } }
             }
         }
+    });
+
+    var boxContainer = document.getElementById('disciplinas-checkboxes');
+    disciplinas.forEach(function (d, i) {
+        var cor = corDistinta(i);
+        var label = document.createElement('label');
+        label.className = 'form-check form-check-inline mb-0';
+        label.style.cursor = 'pointer';
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.className = 'form-check-input disciplina-cb';
+        input.checked = true;
+        input.dataset.index = i;
+        var span = document.createElement('span');
+        span.className = 'form-check-label small ms-1';
+        span.style.borderLeft = '3px solid ' + cor;
+        span.style.paddingLeft = '6px';
+        span.textContent = d.nome;
+        label.appendChild(input);
+        label.appendChild(span);
+        boxContainer.appendChild(label);
+    });
+
+    function atualizaGrafico() {
+        document.querySelectorAll('.disciplina-cb').forEach(function (input) {
+            var idx = parseInt(input.dataset.index, 10);
+            if (chart.data.datasets[idx]) chart.data.datasets[idx].hidden = !input.checked;
+        });
+        chart.update();
+    }
+
+    document.querySelectorAll('.disciplina-cb').forEach(function (input) {
+        input.addEventListener('change', atualizaGrafico);
+    });
+    document.getElementById('btn-marcar-todos').addEventListener('click', function () {
+        document.querySelectorAll('.disciplina-cb').forEach(function (cb) { cb.checked = true; });
+        atualizaGrafico();
+    });
+    document.getElementById('btn-desmarcar-todos').addEventListener('click', function () {
+        document.querySelectorAll('.disciplina-cb').forEach(function (cb) { cb.checked = false; });
+        atualizaGrafico();
     });
 })();
 </script>

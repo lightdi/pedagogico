@@ -1156,6 +1156,80 @@ def avaliacao_bimestre(turma_id: int, num: int):
     )
 
 
+def _normalizar_nome_disciplina(nome: str) -> str:
+    """Agrupa disciplinas que so diferem por sufixo I, II ou III e remove codigo (ex.: TIN.xxxx -)."""
+    if not nome or not nome.strip():
+        return nome or ""
+    n = nome.strip()
+    # Remove codigo no inicio (ex.: "TIN.0362 - ", "MAT.123 - Algoritmos")
+    n = re.sub(r"^[A-Z]{2,}\.\s*[\d\w.]+\s*[-–]\s*", "", n, flags=re.IGNORECASE).strip()
+    # Remove sufixo I, II ou III no final
+    for sufixo in (" III", " II", " I"):
+        if n.upper().endswith(sufixo.upper()):
+            n = n[: -len(sufixo)].strip() or n
+            break
+    return n or nome.strip()
+
+
+@app.route("/turmas/<int:turma_id>/aluno/<matricula>/historico")
+@login_required
+def aluno_historico(turma_id: int, matricula: str):
+    turma = Turma.query.get(turma_id)
+    if turma is None:
+        flash("Turma nao encontrada.", "danger")
+        return redirect(url_for("dashboard"))
+    aluno = Aluno.query.get(matricula)
+    if aluno is None:
+        flash("Aluno nao encontrado.", "danger")
+        return redirect(url_for("turma_detalhes", turma_id=turma_id))
+
+    boletins = (
+        BoletimBimestral.query.filter_by(aluno_matricula=matricula)
+        .join(Turma)
+        .order_by(Turma.ano_letivo.asc())
+        .all()
+    )
+    labels_ano_bim = []
+    for b in boletins:
+        ano = b.turma.ano_letivo
+        for num in (1, 2, 3, 4):
+            labels_ano_bim.append({"ano": ano, "bim": num, "label": f"{ano}/{num}º"})
+
+    disciplinas_normalizadas = set()
+    for b in boletins:
+        for d in b.disciplinas:
+            disciplinas_normalizadas.add(_normalizar_nome_disciplina(d.nome_disciplina))
+    disciplinas_nomes = sorted(disciplinas_normalizadas)
+
+    chart_disciplinas = []
+    for nome_normalizado in disciplinas_nomes:
+        valores = []
+        for b in boletins:
+            disc = next(
+                (
+                    d
+                    for d in b.disciplinas
+                    if _normalizar_nome_disciplina(d.nome_disciplina) == nome_normalizado
+                ),
+                None,
+            )
+            if disc is None:
+                valores.extend([None, None, None, None])
+            else:
+                valores.extend([disc.nota_b1, disc.nota_b2, disc.nota_b3, disc.nota_b4])
+        chart_disciplinas.append({"nome": nome_normalizado, "notas": valores})
+
+    labels = [lb["label"] for lb in labels_ano_bim]
+    return render_template(
+        "aluno_historico.html",
+        turma=turma,
+        aluno_nome=aluno.nome,
+        matricula=matricula,
+        labels=labels,
+        chart_disciplinas=chart_disciplinas,
+    )
+
+
 @app.route("/turmas/<int:turma_id>/aluno/<matricula>/grafico")
 @login_required
 def aluno_grafico(turma_id: int, matricula: str):

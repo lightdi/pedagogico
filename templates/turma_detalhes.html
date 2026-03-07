@@ -17,7 +17,10 @@
             <span class="text-muted small ms-2">Matricula {{ item.aluno_matricula }}</span>
         </div>
         {% if item.disciplinas %}
-        <a href="{{ url_for('aluno_grafico', turma_id=turma.id, matricula=item.aluno_matricula) }}" class="btn btn-sm btn-outline-secondary">Grafico</a>
+        <div class="d-flex gap-1">
+            <a href="{{ url_for('aluno_grafico', turma_id=turma.id, matricula=item.aluno_matricula) }}" class="btn btn-sm btn-outline-secondary">Grafico</a>
+            <a href="{{ url_for('aluno_historico', turma_id=turma.id, matricula=item.aluno_matricula) }}" class="btn btn-sm btn-outline-secondary">Historico</a>
+        </div>
         {% endif %}
     </div>
     <div class="card-body p-0">

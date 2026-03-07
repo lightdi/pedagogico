@@ -9,57 +9,6 @@
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-xl-2">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 text-muted">Usuarios</h2>
-                <p class="display-6 mb-0">{{ total_users }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 text-muted">Nomes de turma</h2>
-                <p class="display-6 mb-0">{{ total_turma_nomes }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 text-muted">Turmas</h2>
-                <p class="display-6 mb-0">{{ total_turmas }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 text-muted">Alunos</h2>
-                <p class="display-6 mb-0">{{ total_alunos }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 text-muted">Boletins</h2>
-                <p class="display-6 mb-0">{{ total_boletins }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h2 class="h6 text-muted">Logs</h2>
-                <p class="display-6 mb-0">{{ total_logs }}</p>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% if resumo_turmas %}
 <h2 class="h5 mb-3">Turmas do ano</h2>
 <div class="row g-3 mb-4">
@@ -75,6 +24,11 @@
                     <li class="mb-1"><a href="{{ url_for('avaliacao_bimestre', turma_id=resumo.turma.id, num=2) }}" class="btn btn-sm btn-outline-secondary text-decoration-none">B2</a> <span class="badge text-bg-danger">{{ resumo.abaixo_40_b2 }}</span> <span class="badge text-bg-warning">{{ resumo.entre_40_70_b2 }}</span></li>
                     <li class="mb-1"><a href="{{ url_for('avaliacao_bimestre', turma_id=resumo.turma.id, num=3) }}" class="btn btn-sm btn-outline-secondary text-decoration-none">B3</a> <span class="badge text-bg-danger">{{ resumo.abaixo_40_b3 }}</span> <span class="badge text-bg-warning">{{ resumo.entre_40_70_b3 }}</span></li>
                     <li class="mb-1"><a href="{{ url_for('avaliacao_bimestre', turma_id=resumo.turma.id, num=4) }}" class="btn btn-sm btn-outline-secondary text-decoration-none">B4</a> <span class="badge text-bg-danger">{{ resumo.abaixo_40_b4 }}</span> <span class="badge text-bg-warning">{{ resumo.entre_40_70_b4 }}</span></li>
+                </ul>
+                <p class="small mb-2">Alunos com % faltas:</p>
+                <ul class="list-unstyled small mb-3">
+                    <li><span class="badge text-bg-warning">&gt;15%</span> {{ resumo.alunos_faltas_maior_15 }} aluno(s)</li>
+                    <li><span class="badge text-bg-danger">&gt;20%</span> {{ resumo.alunos_faltas_maior_20 }} aluno(s)</li>
                 </ul>
                 <div class="d-flex gap-2">
                     <a href="{{ url_for('turma_grafico', turma_id=resumo.turma.id) }}" class="btn btn-sm btn-outline-secondary flex-grow-1">Grafico</a>

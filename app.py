@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from typing import Optional
 
@@ -174,6 +174,7 @@ class BoletimDisciplina(db.Model):
     nome_disciplina = db.Column(db.String(200), nullable=False)
     codigo_disciplina = db.Column(db.String(50), nullable=True)
     frequencia_percent = db.Column(db.Float, nullable=True)
+    total_faltas = db.Column(db.Integer, nullable=False, default=0)
 
     nota_b1 = db.Column(db.Float, nullable=False, default=0.0)
     falta_b1 = db.Column(db.Integer, nullable=False, default=0)
@@ -330,17 +331,19 @@ def _extract_subjects_with_scores(lines: list[str]) -> list[dict]:
         if collected:
             if len(collected) < 8:
                 collected.extend([0.0] * (8 - len(collected)))
+            fb1, fb2, fb3, fb4 = int(round(collected[1])), int(round(collected[3])), int(round(collected[5])), int(round(collected[7]))
             result.append({
                 "nome_disciplina": nome_disciplina or "Disciplina",
                 "frequencia_percent": frequencia,
+                "total_faltas": fb1 + fb2 + fb3 + fb4,
                 "nota_b1": round(collected[0], 2),
-                "falta_b1": int(round(collected[1])),
+                "falta_b1": fb1,
                 "nota_b2": round(collected[2], 2),
-                "falta_b2": int(round(collected[3])),
+                "falta_b2": fb2,
                 "nota_b3": round(collected[4], 2),
-                "falta_b3": int(round(collected[5])),
+                "falta_b3": fb3,
                 "nota_b4": round(collected[6], 2),
-                "falta_b4": int(round(collected[7])),
+                "falta_b4": fb4,
             })
             index = probe
             continue
@@ -473,18 +476,23 @@ def _upsert_boletins_por_turma(turma_id: int, parsed_students: list[dict]) -> di
         db.session.flush()
         BoletimDisciplina.query.filter_by(boletim_id=boletim.id).delete()
         for d in item.get("disciplinas") or []:
+            f1 = int(d.get("falta_b1", 0) or 0)
+            f2 = int(d.get("falta_b2", 0) or 0)
+            f3 = int(d.get("falta_b3", 0) or 0)
+            f4 = int(d.get("falta_b4", 0) or 0)
             disc = BoletimDisciplina(
                 boletim_id=boletim.id,
                 nome_disciplina=str(d.get("nome_disciplina", "") or "Disciplina")[:200],
                 frequencia_percent=d.get("frequencia_percent"),
+                total_faltas=f1 + f2 + f3 + f4,
                 nota_b1=float(d.get("nota_b1", 0) or 0),
-                falta_b1=int(d.get("falta_b1", 0) or 0),
+                falta_b1=f1,
                 nota_b2=float(d.get("nota_b2", 0) or 0),
-                falta_b2=int(d.get("falta_b2", 0) or 0),
+                falta_b2=f2,
                 nota_b3=float(d.get("nota_b3", 0) or 0),
-                falta_b3=int(d.get("falta_b3", 0) or 0),
+                falta_b3=f3,
                 nota_b4=float(d.get("nota_b4", 0) or 0),
-                falta_b4=int(d.get("falta_b4", 0) or 0),
+                falta_b4=f4,
             )
             db.session.add(disc)
 
@@ -603,6 +611,16 @@ def dashboard():
             BoletimBimestral.turma_id == turma.id,
             BoletimDisciplina.nota_b4 >= 40, BoletimDisciplina.nota_b4 < 70
         ).distinct().count()
+        alunos_faltas_maior_15 = db.session.query(BoletimBimestral.id).join(BoletimDisciplina).filter(
+            BoletimBimestral.turma_id == turma.id,
+            BoletimDisciplina.frequencia_percent.isnot(None),
+            BoletimDisciplina.frequencia_percent < 85,
+        ).distinct().count()
+        alunos_faltas_maior_20 = db.session.query(BoletimBimestral.id).join(BoletimDisciplina).filter(
+            BoletimBimestral.turma_id == turma.id,
+            BoletimDisciplina.frequencia_percent.isnot(None),
+            BoletimDisciplina.frequencia_percent < 80,
+        ).distinct().count()
         resumo_turmas.append({
             "turma": turma,
             "abaixo_b1": abaixo_b1,
@@ -617,6 +635,8 @@ def dashboard():
             "entre_40_70_b3": entre_40_70_b3,
             "abaixo_40_b4": abaixo_40_b4,
             "entre_40_70_b4": entre_40_70_b4,
+            "alunos_faltas_maior_15": alunos_faltas_maior_15,
+            "alunos_faltas_maior_20": alunos_faltas_maior_20,
         })
 
     recent_logs = ActionLog.query.order_by(ActionLog.timestamp.desc()).limit(5).all()
@@ -1319,11 +1339,29 @@ def importar_boletim():
     )
 
 
-@app.route("/logs")
+@app.route("/logs", methods=["GET"])
 @admin_required
 def logs():
     all_logs = ActionLog.query.order_by(ActionLog.timestamp.desc()).limit(300).all()
     return render_template("logs.html", logs=all_logs)
+
+
+@app.route("/logs/limpar", methods=["POST"])
+@admin_required
+def logs_limpar():
+    try:
+        dias = int(request.form.get("dias", 30))
+    except (ValueError, TypeError):
+        dias = 30
+    if dias < 1:
+        dias = 1
+    if dias > 3650:
+        dias = 3650
+    limite = datetime.utcnow() - timedelta(days=dias)
+    deletados = ActionLog.query.filter(ActionLog.timestamp < limite).delete()
+    db.session.commit()
+    flash(f"Foram removidos {deletados} log(s) com mais de {dias} dia(s).", "success")
+    return redirect(url_for("logs"))
 
 
 @app.errorhandler(403)

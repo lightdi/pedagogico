@@ -1546,6 +1546,43 @@ def importar_boletim():
     )
 
 
+@app.route("/remover_alunos_turma", methods=["POST"])
+@admin_required
+def remover_alunos_turma():
+    turma_id = request.form.get("turma_id", type=int)
+    matriculas = request.form.getlist("matricula")
+    ano_filtro = request.form.get("ano_filtro", "")
+    
+    if not turma_id:
+        flash("Turma não identificada.", "danger")
+        return redirect(url_for("importar_boletim"))
+        
+    if not matriculas:
+        flash("Nenhum aluno selecionado para remoção.", "warning")
+        return redirect(url_for("importar_boletim", turma_id=turma_id, ano=ano_filtro if ano_filtro else None))
+        
+    try:
+        deletados = 0
+        for mat in matriculas:
+            boletim = BoletimBimestral.query.filter_by(aluno_matricula=mat, turma_id=turma_id).first()
+            if boletim:
+                db.session.delete(boletim)
+                deletados += 1
+        
+        db.session.commit()
+        if deletados > 0:
+            flash(f"{deletados} aluno(s) removido(s) da turma com sucesso.", "success")
+            register_action("REMOVER_ALUNOS_TURMA", f"{deletados} alunos removidos da turma {turma_id}.")
+        else:
+            flash("Nenhum registro encontrado para remoção.", "warning")
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao remover alunos: {str(e)}", "danger")
+        
+    return redirect(url_for("importar_boletim", turma_id=turma_id, ano=ano_filtro if ano_filtro else None))
+
+
 @app.route("/logs", methods=["GET"])
 @admin_required
 def logs():

@@ -1,1 +1,4 @@
 Primeiro acesso: usuario admin e senha 2026ifpb!
+gh auth refresh -h github.com -s repo
+gh auth setup-git
+git push

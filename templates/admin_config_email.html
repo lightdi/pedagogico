@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Configurar Servidor de E-mail (Gmail){% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <h2 class="mb-4 text-center">Configurações de E-mail</h2>
+        
+        <div class="card shadow border-0">
+            <div class="card-body p-4">
+                <p class="text-muted">Forneça as credenciais SMTP do Google necessárias para que o sistema consiga disparar mensagens para os professores quando um colega registrar Ausência/Falta na turma.</p>
+                <hr class="mb-4">
+                
+                <form action="{{ url_for('admin_config_email') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="email" class="form-label fw-bold">E-mail Remetente (Gmail)</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ current_email }}" placeholder="seu.email@gmail.com" required>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="senha" class="form-label fw-bold">Senha de Aplicativo <small class="fw-normal text-muted">(Não use a senha padrão)</small></label>
+                        <input type="password" class="form-control" id="senha" name="senha" placeholder="••••••••••••••••">
+                        <div class="form-text">Por motivos de segurança, use uma <a href="https://myaccount.google.com/apppasswords" target="_blank">Senha de App do Google (16 caracteres)</a>. Para preservar a senha salva, deixe este campo em branco, a não ser que deseje alterá-la.</div>
+                    </div>
+                    
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-success">Salvar Credenciais SMTP</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -12,7 +12,7 @@
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">Painel Pedagogico</a>
             <div class="me-auto">
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('horarios') }}">Horários das Turmas</a>
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('horarios') }}">Horários</a>
             </div>
             {% if current_user.is_authenticated %}
             <div class="d-flex align-items-center gap-2 gap-lg-3 flex-wrap justify-content-end">
@@ -37,6 +37,10 @@
                         <li><a class="dropdown-item" href="{{ url_for('dashboard_eventos') }}">Dashboard de Eventos</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('notificacoes') }}">Reg. Alunos (Notificações)</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('professores') }}">Reg. Professores</a></li>
+                        {% if current_user.is_admin %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item fw-bold text-danger" href="{{ url_for('admin_professores') }}">Gerenciar Professores</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 {% if current_user.is_admin %}
@@ -46,6 +50,8 @@
                         <li><a class="dropdown-item" href="{{ url_for('turma_nomes') }}">Nomes de Turma</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('turmas') }}">Turmas</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('users') }}">Usuarios</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('admin_config_email') }}">Servidor de E-mail (Notificações)</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
                     </ul>

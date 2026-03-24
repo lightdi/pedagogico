@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Gerenciar Professores - Painel Pedagógico{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h1 class="h3 mb-0">Gerenciar Professores</h1>
+    <div class="d-flex gap-2">
+        <form action="{{ url_for('admin_professores') }}" method="GET" class="input-group" style="max-width: 300px;">
+            <input type="text" class="form-control form-control-sm" name="q" placeholder="Buscar por nome ou e-mail..." value="{{ q }}">
+            <button class="btn btn-sm btn-outline-secondary" type="submit">🔍</button>
+            {% if q %}
+            <a href="{{ url_for('admin_professores') }}" class="btn btn-sm btn-outline-danger" title="Limpar Busca">✖</a>
+            {% endif %}
+        </form>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalProfessor" onclick="openProfessorModal()">
+            + Novo Professor
+        </button>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nome do Professor</th>
+                        <th>E-mail</th>
+                        <th>Eventos Vinculados</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prof in pagination.items %}
+                    <tr>
+                        <td class="align-middle fw-semibold">{{ prof.nome }}</td>
+                        <td class="align-middle">{{ prof.email or '<span class="text-muted fst-italic">Não cadastrado</span>'|safe }}</td>
+                        <td class="align-middle">
+                            <span class="badge bg-secondary">{{ prof.eventos|length }}</span> evento(s)
+                        </td>
+                        <td class="text-end">
+                            <a href="{{ url_for('professores', professor_id=prof.id) }}" class="btn btn-sm btn-outline-info" title="Ver Histórico de Registros">
+                                📋 Registros
+                            </a>
+                            <button class="btn btn-sm btn-outline-primary" 
+                                    onclick="openProfessorModal('{{ prof.id }}', '{{ prof.nome|e }}', '{{ prof.email|e }}')" 
+                                    title="Editar Nome e E-mail">
+                                ✏️ Editar
+                            </button>
+                            <form action="{{ url_for('admin_professores_excluir', prof_id=prof.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este professor?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" {% if prof.eventos|length > 0 %}disabled title="Não é possível excluir professores com eventos"{% else %}title="Excluir"{% endif %}>
+                                    🗑️ 
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-4">Nenhum professor cadastrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav aria-label="Navegação de professores">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('admin_professores', page=pagination.prev_num, q=q) }}">Anterior</a>
+        </li>
+        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page_num %}
+                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('admin_professores', page=page_num, q=q) }}">{{ page_num }}</a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('admin_professores', page=pagination.next_num, q=q) }}">Próxima</a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Modal Professor -->
+<div class="modal fade" id="modalProfessor" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('admin_professores_salvar') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Cadastrar Professor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="prof_id" id="form_prof_id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label" for="form_nome">Nome Completo</label>
+                        <input type="text" class="form-control" name="nome" id="form_nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="form_email">E-mail para Notificações</label>
+                        <input type="email" class="form-control" name="email" id="form_email" placeholder="email@extensao.com">
+                        <small class="text-muted">Utilizado para enviar alertas de falta/reposição na turma.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openProfessorModal(id = '', nome = '', email = '') {
+        document.getElementById('form_prof_id').value = id;
+        document.getElementById('form_nome').value = nome;
+        document.getElementById('form_email').value = email;
+        document.getElementById('modalTitle').innerText = id ? 'Editar Professor' : 'Cadastrar Professor';
+    }
+</script>
+{% endblock %}

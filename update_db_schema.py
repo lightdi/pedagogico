@@ -43,9 +43,16 @@ def update_schema(db_path="instance/pedagogico.db"):
             PRIMARY KEY (evento_professor_id, user_id),
             FOREIGN KEY(evento_professor_id) REFERENCES eventos_professores(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
         """
     ]
+    
+    commands.extend([
+        # Colunas de eventos no horário
+        "ALTER TABLE professores ADD COLUMN email VARCHAR(255);",
+        "ALTER TABLE eventos_professores ADD COLUMN aula_turma_id VARCHAR(255);",
+        "ALTER TABLE eventos_professores ADD COLUMN aula_periodo VARCHAR(50);",
+        "ALTER TABLE eventos_professores ADD COLUMN aula_disciplina VARCHAR(255);"
+    ])
 
     for cmd in commands:
         try:

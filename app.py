@@ -256,6 +256,7 @@ class Professor(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     eventos = db.relationship("EventoProfessor", back_populates="professor", lazy=True, cascade="all, delete-orphan")
@@ -273,11 +274,20 @@ class EventoProfessor(db.Model):
     arquivo_reposicao = db.Column(db.String(255), nullable=True)
     is_restrito = db.Column(db.Boolean, nullable=False, default=False)
     criador_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    aula_turma_id = db.Column(db.String(255), nullable=True)
+    aula_periodo = db.Column(db.String(50), nullable=True)
+    aula_disciplina = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     professor = db.relationship("Professor", back_populates="eventos")
     criador = db.relationship("User", foreign_keys=[criador_id])
     usuarios_permitidos = db.relationship("User", secondary=evento_professor_user_permitido, lazy="subquery")
+
+
+class AppConfig(db.Model):
+    __tablename__ = "app_configs"
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.String(500), nullable=True)
 
 
 class ActionLog(db.Model):
@@ -1998,8 +2008,50 @@ def professores_eventos_novo():
     return redirect(url_for("professores", professor_id=professor_id))
 
 
+@app.route("/professores/eventos/<int:evento_id>/excluir", methods=["POST"])
+@login_required
+def professores_eventos_excluir(evento_id: int):
+    evento = EventoProfessor.query.get_or_404(evento_id)
+    
+    if not current_user.is_admin and evento.criador_id != current_user.id:
+        flash("Você não tem permissão para excluir este evento.", "danger")
+        return redirect(url_for("professores", professor_id=evento.professor_id))
+    
+    prof_id = evento.professor_id
+    tipo = evento.tipo_evento
+    
+    if evento.arquivo_reposicao:
+        file_path = os.path.join(app.root_path, "static", "uploads", "reposicoes", evento.arquivo_reposicao)
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+    db.session.delete(evento)
+    db.session.commit()
+    
+    flash(f"Evento do tipo '{tipo}' excluído com sucesso.", "success")
+    register_action("EXCLUIR_EVENTO_PROFESSOR", f"Evento ID {evento_id} do professor {prof_id} excluído.")
+    
+    return redirect(url_for("professores", professor_id=prof_id))
+
+
+
 @app.route("/horarios", methods=["GET"])
 def horarios():
+    data_str = request.args.get("data")
+    if data_str:
+        try:
+            hoje = datetime.strptime(data_str, "%Y-%m-%d").date()
+        except ValueError:
+            hoje = datetime.today().date()
+    else:
+        hoje = datetime.today().date()
+        
+    start_of_week = hoje - timedelta(days=hoje.weekday())
+    end_of_week = start_of_week + timedelta(days=4)
+    
     xml_path = os.path.join(app.root_path, "static", "uploads", "horarios_atual.xml")
     if not os.path.exists(xml_path):
         # Fallback para o arquivo antigo caso exista
@@ -2091,11 +2143,11 @@ def horarios():
     turmas_list.sort(key=lambda x: x["name"])
     
     ordered_days = [
-        ("10000", "Segunda"),
-        ("01000", "Terça"),
-        ("00100", "Quarta"),
-        ("00010", "Quinta"),
-        ("00001", "Sexta")
+        ("10000", "Segunda", start_of_week),
+        ("01000", "Terça", start_of_week + timedelta(days=1)),
+        ("00100", "Quarta", start_of_week + timedelta(days=2)),
+        ("00010", "Quinta", start_of_week + timedelta(days=3)),
+        ("00001", "Sexta", start_of_week + timedelta(days=4))
     ]
     
     ordered_periods_list = []
@@ -2108,12 +2160,71 @@ def horarios():
     ordered_periods_list.sort(key=lambda x: x[0])
     ordered_periods = [(x[1], x[2]) for x in ordered_periods_list]
     
+    # Eventos (Faltas/Reposições) da semana
+    eventos_semana = EventoProfessor.query.filter(
+        EventoProfessor.data_evento >= start_of_week,
+        EventoProfessor.data_evento <= end_of_week,
+        EventoProfessor.aula_turma_id != None
+    ).all()
+    
+    eventos_dict = {}
+    for ev in eventos_semana:
+        tid = ev.aula_turma_id
+        dt = ev.data_evento.strftime("%Y-%m-%d")
+        per = ev.aula_periodo
+        if tid not in eventos_dict:
+            eventos_dict[tid] = {}
+        if dt not in eventos_dict[tid]:
+            eventos_dict[tid][dt] = {}
+        if per not in eventos_dict[tid][dt]:
+            eventos_dict[tid][dt][per] = []
+        eventos_dict[tid][dt][per].append({
+            "tipo": ev.tipo_evento,
+            "professor": ev.professor.nome,
+            "disciplina": ev.aula_disciplina
+        })
+        
+    all_professors = Professor.query.order_by(Professor.nome).all()
+    
+    prof_name_to_id = {p.nome: p.id for p in all_professors}
+    turma_teachers = {}
+    for cid, cname in classes.items():
+        turma_teachers[cid] = []
+        seen = set()
+        for day, periods_data in grades.get(cid, {}).items():
+            for p_id, aula in periods_data.items():
+                tname = aula.get("teacher")
+                subj = aula.get("subject")
+                if tname and tname != "Sem Professor":
+                    for single_tname in [x.strip() for x in tname.split(",")]:
+                        if single_tname:
+                            pid = prof_name_to_id.get(single_tname)
+                            if pid:
+                                key = (pid, subj)
+                                if key not in seen:
+                                    seen.add(key)
+                                    turma_teachers[cid].append({
+                                        "id": pid,
+                                        "nome": single_tname,
+                                        "disciplina": subj
+                                    })
+                                    
+    # Sort the options by name
+    for cid in turma_teachers:
+        turma_teachers[cid].sort(key=lambda x: (x["nome"], x["disciplina"]))
+    
     return render_template(
         "horarios.html",
         turmas=turmas_list,
         grades=grades,
         ordered_days=ordered_days,
-        ordered_periods=ordered_periods
+        ordered_periods=ordered_periods,
+        hoje=hoje,
+        start_of_week=start_of_week,
+        end_of_week=end_of_week,
+        eventos_dict=eventos_dict,
+        all_professors=all_professors,
+        turma_teachers=turma_teachers
     )
 
 
@@ -2176,6 +2287,264 @@ def importar_horarios():
             return redirect(url_for("importar_horarios"))
             
     return render_template("importar_horarios.html")
+
+
+@app.route("/api/marcar_falta", methods=["POST"])
+@login_required
+def api_marcar_falta():
+    data = request.json
+    turma_id = data.get("turma_id")
+    periodo = data.get("periodo")
+    disciplina = data.get("disciplina")
+    data_evento_str = data.get("data")
+    professor_nome = data.get("professor_nome")
+    
+    if not all([turma_id, periodo, disciplina, data_evento_str, professor_nome]):
+        return {"error": "Dados insuficientes"}, 400
+        
+    try:
+        data_evento = datetime.strptime(data_evento_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Data inválida"}, 400
+        
+    prof = Professor.query.filter_by(nome=professor_nome).first()
+    if not prof:
+        prof = Professor(nome=professor_nome)
+        db.session.add(prof)
+        db.session.commit()
+        
+    evento = EventoProfessor(
+        professor_id=prof.id,
+        tipo_evento="Falta",
+        data_evento=data_evento,
+        quantidade_aulas=1,
+        aula_turma_id=turma_id,
+        aula_periodo=periodo,
+        aula_disciplina=disciplina,
+        criador_id=current_user.id
+    )
+    db.session.add(evento)
+    db.session.commit()
+    
+    import threading
+    import smtplib
+    from email.message import EmailMessage
+    
+    def send_async_email(app_content, t_id, d_evento, t_periodo, p_nome):
+        with app_content():
+            gmail_user = AppConfig.query.get("gmail_user")
+            gmail_pass = AppConfig.query.get("gmail_pass")
+            if not gmail_user or not gmail_pass or not gmail_user.value or not gmail_pass.value:
+                return
+            
+            xml_path = os.path.join(app.root_path, "asctt2012.xml")
+            if not os.path.exists(xml_path):
+                return
+                
+            try:
+                tree = ET.parse(xml_path)
+                root = tree.getroot()
+                teachers = {elem.get("id"): elem.get("short") or elem.get("firstname") or elem.get("name") for elem in root.findall(".//teachers/teacher")}
+                professores_nomes = set()
+                for elem in root.findall(".//lessons/lesson"):
+                    class_ids = elem.get("classids", "").split(",")
+                    if t_id in class_ids:
+                        for tid in elem.get("teacherids", "").split(","):
+                            tname = teachers.get(tid)
+                            if tname:
+                                for single in [x.strip() for x in tname.split(",")]:
+                                    if single: professores_nomes.add(single)
+                                    
+                outros = Professor.query.filter(Professor.nome.in_(list(professores_nomes))).all()
+                destinatarios = [p.email for p in outros if p.email and p.nome != p_nome]
+                
+                if not destinatarios:
+                    return
+                
+                msg = EmailMessage()
+                msg.set_content(f"Olá,\n\nO professor {p_nome} registrou FALTA na turma {t_id} no dia {d_evento} (Período: {t_periodo}).\n\nCaso tenha interesse e disponibilidade, você pode acessar o Painel Pedagógico e solicitar a reposição desta aula no sistema.\n\nAtenciosamente,\nPainel Pedagógico")
+                msg["Subject"] = f"Aviso de Falta: Turma {t_id} - {d_evento}"
+                msg["From"] = gmail_user.value
+                msg["To"] = ", ".join(destinatarios)
+                
+                server = smtplib.SMTP("smtp.gmail.com", 587)
+                server.starttls()
+                server.login(gmail_user.value, gmail_pass.value)
+                server.send_message(msg)
+                server.quit()
+            except Exception as e:
+                import logging
+                logging.error(f"Erro ao enviar e-mail: {e}")
+
+    threading.Thread(target=send_async_email, args=(app.app_context, turma_id, data_evento_str, periodo, professor_nome)).start()
+    
+    return {"status": "success", "message": "Falta registrada com sucesso. E-mails de notificação na fila."}
+
+
+@app.route("/api/marcar_reposicao", methods=["POST"])
+@login_required
+def api_marcar_reposicao():
+    data = request.json
+    turma_id = data.get("turma_id")
+    periodo = data.get("periodo")
+    disciplina = data.get("disciplina")
+    data_evento_str = data.get("data")
+    professor_sub_id = data.get("professor_sub_id")
+    
+    if not all([turma_id, periodo, disciplina, data_evento_str, professor_sub_id]):
+        return {"error": "Dados insuficientes"}, 400
+        
+    try:
+        data_evento = datetime.strptime(data_evento_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Data inválida"}, 400
+        
+    evento = EventoProfessor(
+        professor_id=professor_sub_id,
+        tipo_evento="Reposição",
+        data_evento=data_evento,
+        quantidade_aulas=1,
+        aula_turma_id=turma_id,
+        aula_periodo=periodo,
+        aula_disciplina=disciplina,
+        criador_id=current_user.id
+    )
+    db.session.add(evento)
+    db.session.commit()
+    
+    return {"status": "success", "message": "Reposição cadastrada com sucesso."}
+
+
+@app.route("/api/excluir_falta", methods=["POST"])
+@login_required
+def api_excluir_falta():
+    data = request.json
+    turma_id = data.get("turma_id")
+    periodo = data.get("periodo")
+    data_evento_str = data.get("data")
+    
+    if not all([turma_id, periodo, data_evento_str]):
+        return {"error": "Dados insuficientes"}, 400
+        
+    try:
+        data_evento = datetime.strptime(data_evento_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Data inválida"}, 400
+        
+    # Exclui a Falta e também a Reposição (se houver) daquela célula
+    eventos = EventoProfessor.query.filter_by(
+        aula_turma_id=turma_id,
+        aula_periodo=periodo,
+        data_evento=data_evento
+    ).all()
+    
+    for ev in eventos:
+        if ev.tipo_evento in ["Falta", "Reposição"]:
+            db.session.delete(ev)
+            
+    db.session.commit()
+    return {"status": "success", "message": "Falta (e reposições) excluídas da grade."}
+
+
+@app.route("/api/excluir_reposicao", methods=["POST"])
+@login_required
+def api_excluir_reposicao():
+    data = request.json
+    turma_id = data.get("turma_id")
+    periodo = data.get("periodo")
+    data_evento_str = data.get("data")
+    
+    if not all([turma_id, periodo, data_evento_str]):
+        return {"error": "Dados insuficientes"}, 400
+        
+    try:
+        data_evento = datetime.strptime(data_evento_str, "%Y-%m-%d").date()
+    except ValueError:
+        return {"error": "Data inválida"}, 400
+        
+    # Exclui APENAS a Reposição
+    eventos = EventoProfessor.query.filter_by(
+        aula_turma_id=turma_id,
+        aula_periodo=periodo,
+        data_evento=data_evento,
+        tipo_evento="Reposição"
+    ).all()
+    
+    for ev in eventos:
+        db.session.delete(ev)
+        
+    db.session.commit()
+    return {"status": "success", "message": "Reposição excluída."}
+
+
+@app.route("/admin/professores", methods=["GET"])
+@admin_required
+def admin_professores():
+    page = request.args.get("page", 1, type=int)
+    q = request.args.get("q", "").strip()
+    query = Professor.query
+    if q:
+        query = query.filter((Professor.nome.ilike(f"%{q}%")) | (Professor.email.ilike(f"%{q}%")))
+    pagination = query.order_by(Professor.nome).paginate(page=page, per_page=15, error_out=False)
+    return render_template("admin_professores.html", pagination=pagination, q=q)
+
+@app.route("/admin/professores/salvar", methods=["POST"])
+@admin_required
+def admin_professores_salvar():
+    prof_id = request.form.get("prof_id")
+    nome = request.form.get("nome")
+    email = request.form.get("email")
+    if prof_id:
+        p = Professor.query.get(prof_id)
+        if p:
+            p.nome = nome
+            p.email = email
+            flash("Professor atualizado com sucesso.", "success")
+    else:
+        p = Professor(nome=nome, email=email)
+        db.session.add(p)
+        flash("Professor cadastrado com sucesso.", "success")
+    db.session.commit()
+    return redirect(url_for("admin_professores"))
+
+@app.route("/admin/professores/<int:prof_id>/excluir", methods=["POST"])
+@admin_required
+def admin_professores_excluir(prof_id):
+    p = Professor.query.get_or_404(prof_id)
+    if p.eventos:
+        flash("Não é possível excluir professor com eventos registrados.", "danger")
+    else:
+        db.session.delete(p)
+        db.session.commit()
+        flash("Professor excluído com sucesso.", "success")
+    return redirect(url_for("admin_professores"))
+
+
+@app.route("/admin/config_email", methods=["GET", "POST"])
+@admin_required
+def admin_config_email():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        senha = request.form.get("senha", "").strip()
+        
+        def set_config(k, v):
+            conf = AppConfig.query.get(k)
+            if not conf:
+                conf = AppConfig(key=k)
+                db.session.add(conf)
+            conf.value = v
+            
+        set_config("gmail_user", email)
+        if senha:
+            set_config("gmail_pass", senha)
+            
+        db.session.commit()
+        flash("Configurações de E-mail salvas com sucesso! O sistema usará estas credenciais para os alertas.", "success")
+        return redirect(url_for("admin_config_email"))
+        
+    conf = AppConfig.query.get("gmail_user")
+    current_email = conf.value if conf else ""
+    return render_template("admin_config_email.html", current_email=current_email)
 
 
 @app.errorhandler(403)

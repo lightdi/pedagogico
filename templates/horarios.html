@@ -2,10 +2,14 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h2>Horários das Turmas</h2>
-            <p class="text-muted">Selecione uma turma abaixo para visualizar o cronograma de aulas extraído do aSc Timetables.</p>
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <h2>Horários</h2>
+            <p class="text-muted mb-0">Selecione uma turma para visualizar o cronograma.</p>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0 d-flex align-items-center justify-content-md-end gap-2">
+            <label for="semanaData" class="form-label mb-0 fw-bold">Semana de:</label>
+            <input type="date" id="semanaData" class="form-control" style="max-width: 200px;" value="{{ hoje.strftime('%Y-%m-%d') }}" onchange="window.location.href='?data=' + this.value">
         </div>
     </div>
 
@@ -37,8 +41,8 @@
                             <thead class="bg-light">
                                 <tr>
                                     <th style="width: 10%;">Período</th>
-                                    {% for day_binary, day_name in ordered_days %}
-                                        <th>{{ day_name }}</th>
+                                    {% for day_binary, day_name, d_date in ordered_days %}
+                                        <th>{{ day_name }}<br><small class="text-muted fw-normal">{{ d_date.strftime('%d/%m') }}</small></th>
                                     {% endfor %}
                                 </tr>
                             </thead>
@@ -49,12 +53,61 @@
                                             <strong>{{ p_info.name }}º</strong><br>
                                             <small class="text-muted">{{ p_info.starttime }} - {{ p_info.endtime }}</small>
                                         </td>
-                                        {% for day_binary, day_name in ordered_days %}
-                                            <td class="align-middle">
+                                        {% for day_binary, day_name, d_date in ordered_days %}
+                                            <td class="align-middle p-1">
                                                 {% set aula = grades.get(turma.id, {}).get(day_binary, {}).get(p_id) %}
+                                                {% set date_str = d_date.strftime('%Y-%m-%d') %}
+                                                {% set cell_events = eventos_dict.get(turma.id, {}).get(date_str, {}).get(p_id, []) %}
                                                 {% if aula %}
-                                                    <div class="font-weight-bold text-dark">{{ aula.subject }}</div>
-                                                    <div class="small text-muted">{{ aula.teacher }}</div>
+                                                    {% set faltas = cell_events | selectattr("tipo", "equalto", "Falta") | list %}
+                                                    {% set repos = cell_events | selectattr("tipo", "equalto", "Reposição") | list %}
+                                                    
+                                                    {% set has_falta = (faltas | length > 0) %}
+                                                    {% set has_reposicao = (repos | length > 0) %}
+                                                    
+                                                    {% set prof_substituto = "" %}
+                                                    {% set disc_substituta = "" %}
+                                                    {% if has_reposicao %}
+                                                        {% set prof_substituto = repos[0].professor %}
+                                                        {% set disc_substituta = repos[0].disciplina %}
+                                                    {% endif %}
+
+                                                    {% set cell_class = "" %}
+                                                    {% if has_reposicao %}
+                                                        {% set cell_class = "bg-success text-white border border-success" %}
+                                                    {% elif has_falta %}
+                                                        {% set cell_class = "bg-danger text-white border border-danger" %}
+                                                    {% endif %}
+
+                                                    <div id="cell-{{ turma.id }}-{{ p_id }}-{{ date_str }}" 
+                                                         class="p-2 h-100 rounded {{ cell_class }} class-block-clickable" 
+                                                         {% if current_user.is_authenticated %}
+                                                            style="cursor: pointer; transition: 0.2s opacity;"
+                                                            onmouseover="this.style.opacity=0.8"
+                                                            onmouseout="this.style.opacity=1"
+                                                            data-tid="{{ turma.id }}"
+                                                            data-tnome="{{ turma.name|e }}"
+                                                            data-per="{{ p_id }}"
+                                                            data-data="{{ date_str }}"
+                                                            data-disc="{{ aula.subject|e }}"
+                                                            data-prof="{{ aula.teacher|e }}"
+                                                            data-has-falta="{{ '1' if has_falta else '0' }}"
+                                                            data-has-repo="{{ '1' if has_reposicao else '0' }}"
+                                                            onclick="handleCellClick(this)"
+                                                         {% endif %}
+                                                    >
+                                                        <div class="font-weight-bold {% if has_falta and not has_reposicao %}text-white{% elif has_reposicao %}text-white{% else %}text-dark{% endif %}">
+                                                            {{ disc_substituta if has_reposicao else aula.subject }}
+                                                        </div>
+                                                        <div class="small {% if has_falta and not has_reposicao %}text-white{% elif has_reposicao %}text-white{% else %}text-muted{% endif %}">
+                                                            {{ prof_substituto if has_reposicao else aula.teacher }}
+                                                        </div>
+                                                        {% if has_falta and not has_reposicao %}
+                                                            <div class="badge bg-light text-danger mt-1">FALTA REGISTRADA</div>
+                                                        {% elif has_reposicao %}
+                                                            <div class="badge bg-light text-success mt-1">AULA SUBSTITUÍDA</div>
+                                                        {% endif %}
+                                                    </div>
                                                 {% else %}
                                                     <span class="text-black-50">-</span>
                                                 {% endif %}
@@ -92,6 +145,293 @@
                 selected.classList.remove('d-none');
             }
         }
+        localStorage.setItem('horarios_selected_turma', turmaId || 'todos');
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedTurma = localStorage.getItem('horarios_selected_turma');
+        if (savedTurma) {
+            const selectEl = document.getElementById('turmaSelect');
+            if(selectEl) selectEl.value = savedTurma;
+            mostrarHorario(savedTurma);
+        }
+    });
+
+    {% if current_user.is_authenticated %}
+    const turmaTeachersData = {{ turma_teachers | tojson }};
+    let mFalta, mRep;
+    document.addEventListener('DOMContentLoaded', function() {
+        mFalta = new bootstrap.Modal(document.getElementById('modalFalta'));
+        mRep = new bootstrap.Modal(document.getElementById('modalReposicao'));
+    });
+
+    function handleCellClick(elem) {
+        const tid = elem.getAttribute('data-tid');
+        const tnome = elem.getAttribute('data-tnome');
+        const per = elem.getAttribute('data-per');
+        const data = elem.getAttribute('data-data');
+        const disc = elem.getAttribute('data-disc');
+        const prof = elem.getAttribute('data-prof');
+        const hasFalta = elem.getAttribute('data-has-falta') === '1';
+        const cellId = elem.id;
+
+        if (!hasFalta) {
+            abrirFalta(tid, tnome, per, data, disc, prof, cellId);
+        } else {
+            abrirReposicao(tid, tnome, per, data, disc, cellId);
+        }
+    }
+
+    function abrirFalta(tid, tnome, per, data, disc, pnome, cellId) {
+        document.getElementById('f_turma_nome').innerText = tnome;
+        document.getElementById('f_data').innerText = data.split('-').reverse().join('/');
+        document.getElementById('f_disciplina').innerText = disc;
+        document.getElementById('f_professor').innerText = pnome;
+        document.getElementById('f_turma_id').value = tid;
+        document.getElementById('f_periodo').value = per;
+        document.getElementById('f_data_val').value = data;
+        document.getElementById('f_cell_id').value = cellId;
+        mFalta.show();
+    }
+
+    function updateDisciplinaFromProf() {
+        const sel = document.getElementById('r_professor_sub_id');
+        const opt = sel.options[sel.selectedIndex];
+        if(opt && opt.getAttribute('data-disciplina')) {
+            document.getElementById('r_disciplina_nova').value = opt.getAttribute('data-disciplina');
+        }
+    }
+
+    function abrirReposicao(tid, tnome, per, data, disc, cellId) {
+        document.getElementById('r_turma_nome').innerText = tnome;
+        document.getElementById('r_data').innerText = data.split('-').reverse().join('/');
+        document.getElementById('r_turma_id').value = tid;
+        document.getElementById('r_periodo').value = per;
+        document.getElementById('r_data_val').value = data;
+        document.getElementById('r_cell_id').value = cellId;
+        
+        // Populate substitute teachers specifically for this class
+        const selProf = document.getElementById('r_professor_sub_id');
+        selProf.innerHTML = '';
+        const teachers = turmaTeachersData[tid] || [];
+        if (teachers.length > 0) {
+            teachers.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.text = t.nome + ' - ' + t.disciplina;
+                opt.setAttribute('data-disciplina', t.disciplina);
+                selProf.appendChild(opt);
+            });
+            updateDisciplinaFromProf(); // sets discipline dynamically
+        } else {
+            const opt = document.createElement('option');
+            opt.value = "";
+            opt.text = "Nenhum professor listado nesta turma.";
+            selProf.appendChild(opt);
+            document.getElementById('r_disciplina_nova').value = disc;
+        }
+
+        const cell = document.getElementById(cellId);
+        const hasRepo = cell.getAttribute('data-has-repo') === '1';
+        if (hasRepo) {
+            document.getElementById('btn-excluir-reposicao').style.display = 'inline-block';
+            document.getElementById('btn-excluir-falta-rep').style.display = 'none';
+        } else {
+            document.getElementById('btn-excluir-reposicao').style.display = 'none';
+            document.getElementById('btn-excluir-falta-rep').style.display = 'inline-block';
+        }
+        
+        mRep.show();
+    }
+
+    function salvarFalta() {
+        fetch("{{ url_for('api_marcar_falta') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                turma_id: document.getElementById('f_turma_id').value,
+                periodo: document.getElementById('f_periodo').value,
+                disciplina: document.getElementById('f_disciplina').innerText,
+                data: document.getElementById('f_data_val').value,
+                professor_nome: document.getElementById('f_professor').innerText
+            })
+        }).then(res => res.json()).then(data => {
+            if(data.status === 'success') {
+                const cellId = document.getElementById('f_cell_id').value;
+                const cell = document.getElementById(cellId);
+                cell.className = "p-2 h-100 rounded bg-danger text-white border border-danger class-block-clickable";
+                cell.setAttribute('data-has-falta', '1');
+                cell.setAttribute('data-has-repo', '0');
+                
+                const discNova = document.getElementById('f_disciplina').innerText;
+                const profNovo = document.getElementById('f_professor').innerText;
+                
+                cell.innerHTML = `
+                    <div class="font-weight-bold text-white">${discNova}</div>
+                    <div class="small text-white">${profNovo}</div>
+                    <div class="badge bg-light text-danger mt-1">FALTA REGISTRADA</div>
+                `;
+                mFalta.hide();
+            } else alert(data.error);
+        });
+    }
+    
+    function salvarReposicao() {
+        fetch("{{ url_for('api_marcar_reposicao') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                turma_id: document.getElementById('r_turma_id').value,
+                periodo: document.getElementById('r_periodo').value,
+                disciplina: document.getElementById('r_disciplina_nova').value,
+                data: document.getElementById('r_data_val').value,
+                professor_sub_id: document.getElementById('r_professor_sub_id').value
+            })
+        }).then(res => res.json()).then(data => {
+            if(data.status === 'success') {
+                const cellId = document.getElementById('r_cell_id').value;
+                const cell = document.getElementById(cellId);
+                cell.className = "p-2 h-100 rounded bg-success text-white border border-success class-block-clickable";
+                cell.setAttribute('data-has-falta', '1');
+                cell.setAttribute('data-has-repo', '1');
+                
+                const newDisc = document.getElementById('r_disciplina_nova').value;
+                const selProf = document.getElementById('r_professor_sub_id');
+                const newProf = selProf.options[selProf.selectedIndex].text;
+                
+                cell.innerHTML = `
+                    <div class="font-weight-bold text-white">${newDisc}</div>
+                    <div class="small text-white">${newProf}</div>
+                    <div class="badge bg-light text-success mt-1">AULA SUBSTITUÍDA</div>
+                `;
+                mRep.hide();
+            } else alert(data.error);
+        });
+    }
+
+    function excluirFaltaModal(tipoModal) {
+        const tid = document.getElementById(tipoModal === 'Falta' ? 'f_turma_id' : 'r_turma_id').value;
+        const per = document.getElementById(tipoModal === 'Falta' ? 'f_periodo' : 'r_periodo').value;
+        const data = document.getElementById(tipoModal === 'Falta' ? 'f_data_val' : 'r_data_val').value;
+        const cellId = document.getElementById(tipoModal === 'Falta' ? 'f_cell_id' : 'r_cell_id').value;
+        
+        fetch("{{ url_for('api_excluir_falta') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ turma_id: tid, periodo: per, data: data })
+        }).then(res => res.json()).then(resp => {
+            if(resp.status === 'success') {
+                const cell = document.getElementById(cellId);
+                cell.className = "p-2 h-100 rounded class-block-clickable";
+                cell.setAttribute('data-has-falta', '0');
+                cell.setAttribute('data-has-repo', '0');
+                const oDisc = cell.getAttribute('data-disc');
+                const oProf = cell.getAttribute('data-prof');
+                cell.innerHTML = `
+                    <div class="font-weight-bold text-dark">${oDisc}</div>
+                    <div class="small text-muted">${oProf}</div>
+                `;
+                if(tipoModal === 'Falta') mFalta.hide(); else mRep.hide();
+            } else alert(resp.error);
+        });
+    }
+
+    function excluirReposicao() {
+        const tid = document.getElementById('r_turma_id').value;
+        const per = document.getElementById('r_periodo').value;
+        const data = document.getElementById('r_data_val').value;
+        const cellId = document.getElementById('r_cell_id').value;
+        
+        fetch("{{ url_for('api_excluir_reposicao') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ turma_id: tid, periodo: per, data: data })
+        }).then(res => res.json()).then(resp => {
+            if(resp.status === 'success') {
+                const cell = document.getElementById(cellId);
+                cell.className = "p-2 h-100 rounded bg-danger text-white border border-danger class-block-clickable";
+                cell.setAttribute('data-has-falta', '1');
+                cell.setAttribute('data-has-repo', '0');
+                const oDisc = cell.getAttribute('data-disc');
+                const oProf = cell.getAttribute('data-prof');
+                cell.innerHTML = `
+                    <div class="font-weight-bold text-white">${oDisc}</div>
+                    <div class="small text-white">${oProf}</div>
+                    <div class="badge bg-light text-danger mt-1">FALTA REGISTRADA</div>
+                `;
+                mRep.hide();
+            } else alert(resp.error);
+        });
+    }
+    {% endif %}
 </script>
+
+{% if current_user.is_authenticated %}
+<!-- Modal Falta -->
+<div class="modal fade" id="modalFalta" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Registrar Falta do Professor</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Confirmar falta na turma <strong id="f_turma_nome"></strong>, dia <strong id="f_data"></strong>?</p>
+        <p>Disciplina: <strong id="f_disciplina"></strong><br>Professor: <strong id="f_professor"></strong></p>
+        <p class="text-muted small mb-0">Ao prosseguir, os demais professores da turma serão notificados.</p>
+        <input type="hidden" id="f_turma_id">
+        <input type="hidden" id="f_periodo">
+        <input type="hidden" id="f_data_val">
+        <input type="hidden" id="f_cell_id">
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" onclick="excluirFaltaModal('Falta')">Desfazer/Excluir</button>
+        <div>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-danger" onclick="salvarFalta()">Registrar Falta</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reposicao -->
+<div class="modal fade" id="modalReposicao" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title">Registrar Substituto / Reposição</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>A aula da turma <strong id="r_turma_nome"></strong> do dia <strong id="r_data"></strong> está marcada como FALTA. Preencha a substituição:</p>
+        <div class="mb-3">
+            <label class="form-label fw-bold">Professor Substituto (desta Turma):</label>
+            <select class="form-select" id="r_professor_sub_id" onchange="updateDisciplinaFromProf()">
+                <!-- Preenchido via JS dinamicamente com filtros de Turma -->
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-bold">Disciplina:</label>
+            <input type="text" class="form-control" id="r_disciplina_nova">
+        </div>
+        <input type="hidden" id="r_turma_id">
+        <input type="hidden" id="r_periodo">
+        <input type="hidden" id="r_data_val">
+        <input type="hidden" id="r_cell_id">
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <div>
+            <button type="button" class="btn btn-outline-danger" id="btn-excluir-falta-rep" onclick="excluirFaltaModal('Reposicao')">Excluir Falta</button>
+            <button type="button" class="btn btn-outline-warning text-dark" id="btn-excluir-reposicao" onclick="excluirReposicao()">Excluir Reposição</button>
+        </div>
+        <div>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-success" onclick="salvarReposicao()">Registar Substituto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

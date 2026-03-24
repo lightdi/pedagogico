@@ -60,6 +60,7 @@
                                 <th>Descrição / Motivo</th>
                                 <th>Anexo</th>
                                 <th>Status</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -95,6 +96,15 @@
                                     <span class="badge text-bg-warning" title="Visível apenas para usuários autorizados">🔒 Restrito</span>
                                     {% else %}
                                     <span class="badge text-bg-light border text-muted">Público</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if current_user.is_admin or ev.criador_id == current_user.id %}
+                                    <form action="{{ url_for('professores_eventos_excluir', evento_id=ev.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir ESTE EVENTO permanentemente?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Excluir">🗑️</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
                             </tr>

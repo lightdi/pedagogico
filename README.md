@@ -1,4 +1,4 @@
-﻿# Dashboard Pedagogico (Flask + SQLite + SQLAlchemy)
+# Dashboard Pedagogico (Flask + SQLite + SQLAlchemy)
 
 Projeto com login obrigatorio para acesso ao dashboard, gerenciamento de usuarios, cadastro de turmas, importacao de boletins em PDF e log de acoes.
 
@@ -46,6 +46,8 @@ No primeiro start, se o banco estiver vazio, o sistema cria automaticamente o us
 - Importacao de boletim PDF por turma (somente admin)
 - Cadastro/atualizacao de alunos por matricula (matricula como chave primaria)
 - Registro de medias e faltas por bimestre
+- Quadro de notificações e registro de eventos disciplinares/ocorrências dos alunos
+- Cadastro rápido e registro de faltas/eventos dos professores
 - Logs de acoes (somente admin)
 
 ## Regra da importacao de boletim

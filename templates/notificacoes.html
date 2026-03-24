@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Quadro de Notificações - Painel Pedagógico{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h1 class="h3 mb-0">Quadro de Notificações</h1>
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge text-bg-primary">Ano {{ ano_selecionado }}</span>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('notificacoes') }}" class="row g-3 align-items-end">
+            <input type="hidden" name="ano" value="{{ ano_selecionado }}">
+            <div class="col-md-4">
+                <label for="turma_id" class="form-label">Turma</label>
+                <select name="turma_id" id="turma_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- Selecione uma turma --</option>
+                    {% for t in turmas_ano %}
+                    <option value="{{ t.id }}" {% if turma_id_selecionada == t.id %}selected{% endif %}>{{ t.turma_nome.nome }} - {{ t.turma_nome.periodo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-8">
+                <p class="text-muted small mb-0 mt-4">Selecione uma turma para carregar os alunos.</p>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if turma_id_selecionada %}
+<div class="row">
+    <div class="col-md-4 col-lg-3 mb-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white">
+                <strong>Alunos</strong>
+            </div>
+            <div class="list-group list-group-flush rounded-bottom" style="max-height: 600px; overflow-y: auto;">
+                {% for aluno in alunos_turma %}
+                <a href="{{ url_for('notificacoes', ano=ano_selecionado, turma_id=turma_id_selecionada, aluno_matricula=aluno.matricula) }}" class="list-group-item list-group-item-action {% if aluno_selecionado and aluno.matricula == aluno_selecionado.matricula %}active{% endif %}">
+                    <div class="small fw-bold">{{ aluno.nome }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">Matrícula: {{ aluno.matricula }}</div>
+                </a>
+                {% else %}
+                <div class="list-group-item text-muted small text-center py-4">Nenhum aluno encontrado.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8 col-lg-9 mb-4">
+        {% if aluno_selecionado %}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Eventos: {{ aluno_selecionado.nome }}</strong>
+                <span class="badge text-bg-secondary">{{ aluno_selecionado.matricula }}</span>
+            </div>
+            <div class="card-body p-0">
+                {% if eventos %}
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0 text-sm">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Prioridade</th>
+                                <th>Gravidade</th>
+                                <th>Descrição do Evento</th>
+                                <th>Fora de Sala</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ev in eventos %}
+                            <tr>
+                                <td>{{ ev.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>
+                                    <span class="badge {% if ev.prioridade == 'Alta' %}text-bg-danger{% elif ev.prioridade == 'Baixa' %}text-bg-info{% else %}text-bg-warning{% endif %}">
+                                        {{ ev.prioridade }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if ev.gravidade == 'Gravíssimo' %}text-bg-dark{% elif ev.gravidade == 'Grave' %}text-bg-danger{% else %}text-bg-secondary{% endif %}">
+                                        {{ ev.gravidade }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {{ ev.descricao }}
+                                    {% if ev.fora_de_sala and ev.motivo_fora_de_sala %}
+                                    <br><small class="text-danger">Motivo: {{ ev.motivo_fora_de_sala }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if ev.fora_de_sala %}
+                                    <span class="text-danger fw-bold">Sim</span>
+                                    {% else %}
+                                    <span class="text-muted">Não</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if ev.is_restrito %}
+                                    <span class="badge text-bg-warning" title="Visível apenas para usuários autorizados">🔒 Restrito</span>
+                                    {% else %}
+                                    <span class="badge text-bg-light border text-muted">Público</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    Nenhum evento registrado para este aluno.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-header text-bg-primary">
+                <strong>Registrar Novo Evento</strong>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('notificacoes_novo') }}" method="POST">
+                    <input type="hidden" name="ano" value="{{ ano_selecionado }}">
+                    <input type="hidden" name="turma_id" value="{{ turma_id_selecionada }}">
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label for="prioridade" class="form-label">Prioridade</label>
+                            <select name="prioridade" id="prioridade" class="form-select" required>
+                                <option value="Baixa">Baixa</option>
+                                <option value="Média" selected>Média</option>
+                                <option value="Alta">Alta</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="gravidade" class="form-label">Gravidade</label>
+                            <select name="gravidade" id="gravidade" class="form-select" required>
+                                <option value="Leve" selected>Leve</option>
+                                <option value="Grave">Grave</option>
+                                <option value="Gravíssimo">Gravíssimo</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição do Evento</label>
+                        <textarea class="form-control" name="descricao" id="descricao" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="row g-3 mb-4 align-items-center">
+                        <div class="col-md-3">
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" role="switch" id="fora_de_sala" name="fora_de_sala">
+                                <label class="form-check-label text-danger" for="fora_de_sala">Fora de sala?</label>
+                            </div>
+                        </div>
+                        <div class="col-md-9" id="div-motivo" style="display: none;">
+                            <input type="text" class="form-control" name="motivo_fora_de_sala" id="motivo_fora_de_sala" placeholder="Motivo (se aplicável)">
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4 align-items-start border rounded p-2 mx-0 bg-white shadow-sm">
+                        <div class="col-md-3">
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" role="switch" id="is_restrito" name="is_restrito">
+                                <label class="form-check-label text-warning fw-bold" for="is_restrito">
+                                    🔒 Restrito
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-2" style="font-size: 0.70rem;">Oculta registro de outros usuários.</small>
+                        </div>
+                        <div class="col-md-9" id="div-usuarios-permitidos" style="display: none;">
+                            <label class="form-label small fw-bold mb-1">Usuários Autorizados</label>
+                            <div class="border rounded p-2 overflow-auto bg-light" style="max-height: 150px;">
+                                {% for u in usuarios_sistema %}
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" name="usuarios_permitidos" value="{{ u.id }}" id="user_{{ u.id }}">
+                                    <label class="form-check-label small" for="user_{{ u.id }}">
+                                        {{ u.full_name }} <span class="text-muted">(@{{ u.username }})</span>
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mb-2">Aplicar evento a outros alunos desta turma (opcional):</h6>
+                    <div class="border rounded p-3 mb-4 bg-white" style="max-height: 200px; overflow-y: auto;">
+                        {% for aluno in alunos_turma %}
+                        <div class="form-check mb-1">
+                            <input class="form-check-input mt-1" type="checkbox" name="matriculas" value="{{ aluno.matricula }}" id="chk_{{ aluno.matricula }}" {% if aluno.matricula == aluno_selecionado.matricula %}checked{% endif %}>
+                            <label class="form-check-label small" for="chk_{{ aluno.matricula }}">
+                                {{ aluno.nome }} <span class="text-muted">({{ aluno.matricula }})</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary">Registrar Evento</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            Nenhum aluno selecionado ou encontrado nesta turma.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkForaSala = document.getElementById('fora_de_sala');
+        const divMotivo = document.getElementById('div-motivo');
+        const inputMotivo = document.getElementById('motivo_fora_de_sala');
+        const checkRestrito = document.getElementById('is_restrito');
+        const divUsuarios = document.getElementById('div-usuarios-permitidos');
+        
+        if(checkForaSala && divMotivo) {
+            checkForaSala.addEventListener('change', function() {
+                if(this.checked) {
+                    divMotivo.style.display = 'block';
+                    if (inputMotivo) inputMotivo.required = true;
+                } else {
+                    divMotivo.style.display = 'none';
+                    if (inputMotivo) inputMotivo.required = false;
+                }
+            });
+        }
+        
+        if(checkRestrito && divUsuarios) {
+            checkRestrito.addEventListener('change', function() {
+                if(this.checked) {
+                    divUsuarios.style.display = 'block';
+                } else {
+                    divUsuarios.style.display = 'none';
+                    const checkboxes = divUsuarios.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(chk => chk.checked = false);
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

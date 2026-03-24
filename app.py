@@ -150,6 +150,7 @@ class Aluno(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     boletins = db.relationship("BoletimBimestral", back_populates="aluno", lazy=True)
+    eventos = db.relationship("Evento", back_populates="aluno", lazy=True, cascade="all, delete-orphan")
 
 
 class BoletimBimestral(db.Model):
@@ -217,6 +218,65 @@ class ImportacaoBoletimPreview(db.Model):
     arquivo_nome = db.Column(db.String(255), nullable=False)
     payload_json = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+evento_user_permitido = db.Table('evento_user_permitido',
+    db.Column('evento_id', db.Integer, db.ForeignKey('eventos.id', ondelete="CASCADE"), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+)
+
+evento_professor_user_permitido = db.Table('evento_professor_user_permitido',
+    db.Column('evento_professor_id', db.Integer, db.ForeignKey('eventos_professores.id', ondelete="CASCADE"), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+)
+
+
+class Evento(db.Model):
+    __tablename__ = "eventos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    aluno_matricula = db.Column(db.String(20), db.ForeignKey("alunos.matricula"), nullable=False)
+    prioridade = db.Column(db.String(50), nullable=False, default="Média")
+    descricao = db.Column(db.Text, nullable=False)
+    gravidade = db.Column(db.String(50), nullable=False, default="Leve")
+    fora_de_sala = db.Column(db.Boolean, nullable=False, default=False)
+    motivo_fora_de_sala = db.Column(db.Text, nullable=True)
+    is_restrito = db.Column(db.Boolean, nullable=False, default=False)
+    criador_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    aluno = db.relationship("Aluno", back_populates="eventos")
+    criador = db.relationship("User", foreign_keys=[criador_id])
+    usuarios_permitidos = db.relationship("User", secondary=evento_user_permitido, lazy="subquery")
+
+
+class Professor(db.Model):
+    __tablename__ = "professores"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    eventos = db.relationship("EventoProfessor", back_populates="professor", lazy=True, cascade="all, delete-orphan")
+
+
+class EventoProfessor(db.Model):
+    __tablename__ = "eventos_professores"
+
+    id = db.Column(db.Integer, primary_key=True)
+    professor_id = db.Column(db.Integer, db.ForeignKey("professores.id"), nullable=False)
+    tipo_evento = db.Column(db.String(50), nullable=False)
+    data_evento = db.Column(db.Date, nullable=False)
+    quantidade_aulas = db.Column(db.Integer, nullable=True)
+    descricao = db.Column(db.Text, nullable=True)
+    arquivo_reposicao = db.Column(db.String(255), nullable=True)
+    is_restrito = db.Column(db.Boolean, nullable=False, default=False)
+    criador_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    professor = db.relationship("Professor", back_populates="eventos")
+    criador = db.relationship("User", foreign_keys=[criador_id])
+    usuarios_permitidos = db.relationship("User", secondary=evento_professor_user_permitido, lazy="subquery")
 
 
 class ActionLog(db.Model):
@@ -1509,6 +1569,395 @@ def logs_limpar():
     db.session.commit()
     flash(f"Foram removidos {deletados} log(s) com mais de {dias} dia(s).", "success")
     return redirect(url_for("logs"))
+
+
+@app.route("/dashboard-eventos", methods=["GET"])
+@login_required
+def dashboard_eventos():
+    ano = request.args.get("ano", type=int) or session.get("ano_dashboard")
+    if ano is None:
+        ano_row = db.session.query(Turma.ano_letivo).order_by(Turma.ano_letivo.desc()).first()
+        ano = ano_row[0] if ano_row else datetime.now().year
+    if ano is not None:
+        session["ano_dashboard"] = ano
+
+    # 1. Total eventos alunos ano
+    eventos_alunos_ano = (
+        db.session.query(Evento.id)
+        .join(Aluno)
+        .join(BoletimBimestral)
+        .join(Turma)
+        .filter(Turma.ano_letivo == ano)
+        .filter(db.or_(
+            ~Evento.is_restrito,
+            Evento.criador_id == current_user.id,
+            Evento.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        ))
+        .distinct().count()
+    )
+    
+    # 2. Total eventos prof ano
+    eventos_prof_ano = db.session.query(EventoProfessor.id).filter(
+        db.extract('year', EventoProfessor.data_evento) == ano,
+        db.or_(
+            ~EventoProfessor.is_restrito,
+            EventoProfessor.criador_id == current_user.id,
+            EventoProfessor.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        )
+    ).count()
+
+    # 3. Alunos com mais eventos
+    top_alunos = (
+        db.session.query(
+            Aluno.nome, 
+            Aluno.matricula,
+            TurmaNome.nome.label("turma_nome"), 
+            TurmaNome.periodo, 
+            db.func.count(Evento.id).label("total")
+        )
+        .join(Evento)
+        .join(BoletimBimestral, Evento.aluno_matricula == BoletimBimestral.aluno_matricula)
+        .join(Turma)
+        .join(TurmaNome)
+        .filter(Turma.ano_letivo == ano)
+        .filter(db.or_(
+            ~Evento.is_restrito,
+            Evento.criador_id == current_user.id,
+            Evento.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        ))
+        .group_by(Aluno.matricula, Aluno.nome, TurmaNome.nome, TurmaNome.periodo)
+        .order_by(db.desc("total"))
+        .limit(10)
+        .all()
+    )
+
+    # 4. Prof com faltas ou reposições (top saldo)
+    professores_stats = []
+    
+    prof_faltas = (
+        db.session.query(Professor.id, Professor.nome, db.func.sum(EventoProfessor.quantidade_aulas).label('total_faltas'))
+        .join(EventoProfessor)
+        .filter(EventoProfessor.tipo_evento == 'Falta', db.extract('year', EventoProfessor.data_evento) == ano)
+        .filter(db.or_(
+            ~EventoProfessor.is_restrito,
+            EventoProfessor.criador_id == current_user.id,
+            EventoProfessor.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        ))
+        .group_by(Professor.id, Professor.nome)
+        .all()
+    )
+    
+    prof_reposicao = (
+        db.session.query(Professor.id, Professor.nome, db.func.sum(EventoProfessor.quantidade_aulas).label('total_reposicoes'))
+        .join(EventoProfessor)
+        .filter(EventoProfessor.tipo_evento == 'Reposição', db.extract('year', EventoProfessor.data_evento) == ano)
+        .filter(db.or_(
+            ~EventoProfessor.is_restrito,
+            EventoProfessor.criador_id == current_user.id,
+            EventoProfessor.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        ))
+        .group_by(Professor.id, Professor.nome)
+        .all()
+    )
+    
+    prof_dict = {}
+    for pid, pnome, f in prof_faltas:
+        prof_dict[pid] = {"nome": pnome, "faltas": f or 0, "reposicoes": 0}
+    for pid, pnome, r in prof_reposicao:
+        if pid not in prof_dict:
+            prof_dict[pid] = {"nome": pnome, "faltas": 0, "reposicoes": 0}
+        prof_dict[pid]["reposicoes"] = r or 0
+        
+    for pid, stats in prof_dict.items():
+        stats["saldo"] = stats["reposicoes"] - stats["faltas"]
+        professores_stats.append({
+            "id": pid,
+            "nome": stats["nome"],
+            "faltas": stats["faltas"],
+            "reposicoes": stats["reposicoes"],
+            "saldo": stats["saldo"]
+        })
+    professores_stats.sort(key=lambda x: x["saldo"])
+
+    # Últimos 10 eventos alunos
+    recentes_alunos = (
+        db.session.query(Evento, Aluno, TurmaNome)
+        .join(Aluno, Evento.aluno_matricula == Aluno.matricula)
+        .join(BoletimBimestral, Aluno.matricula == BoletimBimestral.aluno_matricula)
+        .join(Turma, BoletimBimestral.turma_id == Turma.id)
+        .join(TurmaNome, Turma.turma_nome_id == TurmaNome.id)
+        .filter(Turma.ano_letivo == ano)
+        .filter(db.or_(
+            ~Evento.is_restrito,
+            Evento.criador_id == current_user.id,
+            Evento.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        ))
+        .order_by(Evento.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    
+    # Últimos 10 eventos prof
+    recentes_prof = (
+        db.session.query(EventoProfessor)
+        .filter(db.extract('year', EventoProfessor.data_evento) == ano)
+        .filter(db.or_(
+            ~EventoProfessor.is_restrito,
+            EventoProfessor.criador_id == current_user.id,
+            EventoProfessor.usuarios_permitidos.any(User.id == current_user.id),
+            current_user.is_admin
+        ))
+        .order_by(EventoProfessor.data_evento.desc(), EventoProfessor.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    return render_template(
+        "dashboard_eventos.html",
+        ano_selecionado=ano,
+        eventos_alunos_ano=eventos_alunos_ano,
+        eventos_prof_ano=eventos_prof_ano,
+        top_alunos=top_alunos,
+        professores_stats=professores_stats,
+        recentes_alunos=recentes_alunos,
+        recentes_prof=recentes_prof
+    )
+
+
+@app.route("/notificacoes", methods=["GET"])
+@login_required
+def notificacoes():
+    ano = request.args.get("ano", type=int) or session.get("ano_dashboard")
+    if ano is None:
+        ano_row = db.session.query(Turma.ano_letivo).order_by(Turma.ano_letivo.desc()).first()
+        ano = ano_row[0] if ano_row else datetime.now().year
+    
+    turmas_ano = Turma.query.filter_by(ano_letivo=ano).join(TurmaNome).order_by(TurmaNome.nome.asc()).all()
+    
+    turma_id = request.args.get("turma_id", type=int)
+    
+    alunos_turma = []
+    if turma_id:
+        alunos_turma = (
+            Aluno.query.join(BoletimBimestral)
+            .filter(BoletimBimestral.turma_id == turma_id)
+            .order_by(Aluno.nome.asc())
+            .all()
+        )
+        
+    aluno_selecionado = None
+    eventos = []
+    matricula_selecionada = request.args.get("aluno_matricula", "")
+    
+    if alunos_turma:
+        if not matricula_selecionada:
+            aluno_selecionado = alunos_turma[0]
+        else:
+            aluno_selecionado = next((a for a in alunos_turma if a.matricula == matricula_selecionada), alunos_turma[0])
+            
+        if aluno_selecionado:
+            eventos = Evento.query.filter_by(aluno_matricula=aluno_selecionado.matricula).filter(
+                db.or_(
+                    ~Evento.is_restrito,
+                    Evento.criador_id == current_user.id,
+                    Evento.usuarios_permitidos.any(User.id == current_user.id),
+                    current_user.is_admin
+                )
+            ).order_by(Evento.created_at.desc()).all()
+            
+    usuarios_sistema = User.query.order_by(User.full_name.asc()).all()
+            
+    return render_template(
+        "notificacoes.html",
+        ano_selecionado=ano,
+        turmas_ano=turmas_ano,
+        turma_id_selecionada=turma_id,
+        alunos_turma=alunos_turma,
+        aluno_selecionado=aluno_selecionado,
+        eventos=eventos,
+        usuarios_sistema=usuarios_sistema,
+    )
+
+
+@app.route("/notificacoes/evento/novo", methods=["POST"])
+@login_required
+def notificacoes_novo():
+    ano = request.form.get("ano")
+    turma_id = request.form.get("turma_id")
+    matriculas = request.form.getlist("matriculas")
+    
+    prioridade = request.form.get("prioridade", "Média")
+    descricao = request.form.get("descricao", "").strip()
+    gravidade = request.form.get("gravidade", "Leve")
+    fora_de_sala = request.form.get("fora_de_sala") == "on"
+    motivo_fora_de_sala = request.form.get("motivo_fora_de_sala", "").strip() if fora_de_sala else None
+    
+    is_restrito = request.form.get("is_restrito") == "on"
+    usuarios_permitidos_ids = request.form.getlist("usuarios_permitidos")
+    
+    if not descricao:
+        flash("A descrição do evento é obrigatória.", "danger")
+        return redirect(url_for("notificacoes", ano=ano, turma_id=turma_id))
+        
+    if not matriculas:
+        flash("Nenhum aluno selecionado.", "warning")
+        return redirect(url_for("notificacoes", ano=ano, turma_id=turma_id))
+        
+    usuarios_permitidos = []
+    if is_restrito and usuarios_permitidos_ids:
+        usuarios_permitidos = User.query.filter(User.id.in_(usuarios_permitidos_ids)).all()
+        
+    for matricula in matriculas:
+        evento = Evento(
+            aluno_matricula=matricula,
+            prioridade=prioridade,
+            descricao=descricao,
+            gravidade=gravidade,
+            fora_de_sala=fora_de_sala,
+            motivo_fora_de_sala=motivo_fora_de_sala,
+            is_restrito=is_restrito,
+            criador_id=current_user.id
+        )
+        if is_restrito:
+            evento.usuarios_permitidos.extend(usuarios_permitidos)
+        db.session.add(evento)
+        
+    db.session.commit()
+    flash(f"Evento registrado para {len(matriculas)} aluno(s) com sucesso.", "success")
+    register_action("NOVO_EVENTO", f"Evento registrado para {len(matriculas)} aluno(s). Turma ID: {turma_id}")
+    
+    first_matricula = matriculas[0] if matriculas else ""
+    return redirect(url_for("notificacoes", ano=ano, turma_id=turma_id, aluno_matricula=first_matricula))
+
+
+@app.route("/professores", methods=["GET"])
+@login_required
+def professores():
+    todos_professores = Professor.query.order_by(Professor.nome.asc()).all()
+    
+    professor_id = request.args.get("professor_id", type=int)
+    professor_selecionado = None
+    eventos = []
+    saldo_aulas = None
+    
+    if professor_id:
+        professor_selecionado = Professor.query.get(professor_id)
+        if professor_selecionado:
+            eventos = EventoProfessor.query.filter_by(professor_id=professor_id).filter(
+                db.or_(
+                    ~EventoProfessor.is_restrito,
+                    EventoProfessor.criador_id == current_user.id,
+                    EventoProfessor.usuarios_permitidos.any(User.id == current_user.id),
+                    current_user.is_admin
+                )
+            ).order_by(EventoProfessor.data_evento.desc(), EventoProfessor.created_at.desc()).all()
+            
+            total_faltas = sum((e.quantidade_aulas or 0) for e in eventos if e.tipo_evento == 'Falta')
+            total_reposicoes = sum((e.quantidade_aulas or 0) for e in eventos if e.tipo_evento == 'Reposição')
+            saldo_aulas = total_reposicoes - total_faltas
+            
+    usuarios_sistema = User.query.order_by(User.full_name.asc()).all()
+            
+    return render_template(
+        "professores_eventos.html",
+        professores=todos_professores,
+        professor_selecionado=professor_selecionado,
+        eventos=eventos,
+        saldo_aulas=saldo_aulas,
+        usuarios_sistema=usuarios_sistema
+    )
+
+
+@app.route("/professores/novo", methods=["POST"])
+@login_required
+def professores_novo():
+    nome = request.form.get("nome", "").strip()
+    if not nome:
+        flash("O nome do professor é obrigatório.", "warning")
+        return redirect(url_for("professores"))
+        
+    novo_prof = Professor(nome=nome)
+    db.session.add(novo_prof)
+    db.session.commit()
+    
+    flash(f"Professor '{nome}' cadastrado com sucesso.", "success")
+    register_action("NOVO_PROFESSOR", f"Professor '{nome}' cadastrado.")
+    
+    return redirect(url_for("professores", professor_id=novo_prof.id))
+
+
+@app.route("/professores/eventos/novo", methods=["POST"])
+@login_required
+def professores_eventos_novo():
+    professor_id = request.form.get("professor_id", type=int)
+    if not professor_id:
+        flash("Nenhum professor selecionado.", "danger")
+        return redirect(url_for("professores"))
+        
+    tipo_evento = request.form.get("tipo_evento", "Falta")
+    data_evento_str = request.form.get("data_evento")
+    quantidade_aulas = request.form.get("quantidade_aulas", type=int)
+    descricao = request.form.get("descricao", "").strip()
+    anexo = request.files.get("anexo")
+    
+    is_restrito = request.form.get("is_restrito") == "on"
+    usuarios_permitidos_ids = request.form.getlist("usuarios_permitidos")
+    
+    if not data_evento_str:
+        flash("A data do evento é obrigatória.", "danger")
+        return redirect(url_for("professores", professor_id=professor_id))
+        
+    try:
+        data_evento = datetime.strptime(data_evento_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Formato de data inválido.", "danger")
+        return redirect(url_for("professores", professor_id=professor_id))
+        
+    if tipo_evento == "Outro" and not descricao:
+        flash("A descrição é obrigatória para eventos do tipo 'Outro'.", "warning")
+        return redirect(url_for("professores", professor_id=professor_id))
+        
+    arquivo_nome = None
+    if tipo_evento == "Reposição" and anexo and anexo.filename:
+        from werkzeug.utils import secure_filename
+        import os
+        filename = secure_filename(anexo.filename)
+        upload_dir = os.path.join(app.root_path, "static", "uploads", "reposicoes")
+        os.makedirs(upload_dir, exist_ok=True)
+        base, ext = os.path.splitext(filename)
+        filename = f"{base}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
+        anexo.save(os.path.join(upload_dir, filename))
+        arquivo_nome = filename
+        
+    usuarios_permitidos = []
+    if is_restrito and usuarios_permitidos_ids:
+        usuarios_permitidos = User.query.filter(User.id.in_(usuarios_permitidos_ids)).all()
+        
+    evento = EventoProfessor(
+        professor_id=professor_id,
+        tipo_evento=tipo_evento,
+        data_evento=data_evento,
+        quantidade_aulas=quantidade_aulas if tipo_evento in ["Falta", "Reposição"] else None,
+        descricao=descricao,
+        arquivo_reposicao=arquivo_nome,
+        is_restrito=is_restrito,
+        criador_id=current_user.id
+    )
+    if is_restrito:
+        evento.usuarios_permitidos.extend(usuarios_permitidos)
+    db.session.add(evento)
+    db.session.commit()
+    
+    flash("Evento registrado com sucesso.", "success")
+    register_action("NOVO_EVENTO_PROFESSOR", f"Evento de '{tipo_evento}' registrado para professor ID {professor_id}.")
+    
+    return redirect(url_for("professores", professor_id=professor_id))
 
 
 @app.errorhandler(403)

@@ -25,7 +25,17 @@
                     </select>
                 </label>
                 <span class="text-white-50 small">{{ current_user.full_name }} ({{ current_user.role }})</span>
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('dashboard') }}">Dashboard Central</a>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        Painel de Eventos
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('dashboard_eventos') }}">Dashboard de Eventos</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('notificacoes') }}">Reg. Alunos (Notificações)</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('professores') }}">Reg. Professores</a></li>
+                    </ul>
+                </div>
                 {% if current_user.is_admin %}
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Cadastro</button>

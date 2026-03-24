@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}Eventos dos Professores - Painel Pedagógico{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h1 class="h3 mb-0">Eventos dos Professores</h1>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <form method="GET" action="{{ url_for('professores') }}">
+                    <label for="professor_name" class="form-label">Selecionar Professor</label>
+                    <div class="position-relative">
+                        <input type="text" class="form-control" id="professor_name" name="professor_nome" placeholder="Digite para buscar..." 
+                               value="{{ professor_selecionado.nome if professor_selecionado else '' }}" autocomplete="off">
+                        <div id="autocomplete-list" class="list-group position-absolute w-100 shadow" style="z-index: 1000; display: none; max-height: 250px; overflow-y: auto;">
+                            {% for prof in professores %}
+                            <button type="button" class="list-group-item list-group-item-action autocomplete-item" data-id="{{ prof.id }}" data-name="{{ prof.nome }}">
+                                {{ prof.nome }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <input type="hidden" name="professor_id" id="professor_id_hidden" value="{{ professor_selecionado.id if professor_selecionado else '' }}">
+                </form>
+            </div>
+            <div class="col-md-6 text-md-end text-start mt-3 mt-md-0">
+                <span class="text-muted small me-2">Não encontrou?</span>
+                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNovoProfessor">
+                    + Cadastrar Novo Professor
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if professor_selecionado %}
+<div class="row">
+    <!-- Events List -->
+    <div class="col-lg-8 mb-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Eventos Cadastrados: {{ professor_selecionado.nome }}</strong>
+                {% if saldo_aulas is not none %}
+                <span class="badge {% if saldo_aulas > 0 %}text-bg-success{% elif saldo_aulas < 0 %}text-bg-danger{% else %}text-bg-secondary{% endif %} fs-6">
+                    Saldo: {{ saldo_aulas }} aula(s)
+                </span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if eventos %}
+                <div class="table-responsive">
+                    <table class="table table-striped mb-0 text-sm">
+                        <thead>
+                            <tr>
+                                <th>Data do Evento</th>
+                                <th>Tipo</th>
+                                <th>Faltas</th>
+                                <th>Descrição / Motivo</th>
+                                <th>Anexo</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ev in eventos %}
+                            <tr>
+                                <td>{{ ev.data_evento.strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    <span class="badge {% if ev.tipo_evento == 'Falta' %}text-bg-danger{% elif ev.tipo_evento == 'Reposição' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+                                        {{ ev.tipo_evento }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if ev.tipo_evento == 'Falta' and ev.quantidade_aulas %}
+                                        <span class="text-danger fw-bold">-{{ ev.quantidade_aulas }} aula(s)</span>
+                                    {% elif ev.tipo_evento == 'Reposição' and ev.quantidade_aulas %}
+                                        <span class="text-success fw-bold">+{{ ev.quantidade_aulas }} aula(s)</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ ev.descricao or '-' }}</td>
+                                <td>
+                                    {% if ev.arquivo_reposicao %}
+                                    <a href="{{ url_for('static', filename='uploads/reposicoes/' ~ ev.arquivo_reposicao) }}" target="_blank" class="btn btn-sm btn-outline-info py-0 px-2" title="Ver Anexo">
+                                        📎
+                                    </a>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if ev.is_restrito %}
+                                    <span class="badge text-bg-warning" title="Visível apenas para usuários autorizados">🔒 Restrito</span>
+                                    {% else %}
+                                    <span class="badge text-bg-light border text-muted">Público</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    Nenhum evento registrado para este professor.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- New Event Form -->
+    <div class="col-lg-4 mb-4">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-header text-bg-primary">
+                <strong>Registrar Novo Evento</strong>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('professores_eventos_novo') }}" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="professor_id" value="{{ professor_selecionado.id }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Evento</label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="tipo_evento" id="tipoFalta" value="Falta" checked>
+                                <label class="form-check-label" for="tipoFalta">Falta</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="tipo_evento" id="tipoReposicao" value="Reposição">
+                                <label class="form-check-label" for="tipoReposicao">Reposição</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="tipo_evento" id="tipoOutro" value="Outro">
+                                <label class="form-check-label" for="tipoOutro">Outro</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="data_evento" class="form-label">Data</label>
+                        <input type="date" class="form-control" name="data_evento" id="data_evento" required>
+                    </div>
+
+                    <div class="mb-3" id="div-qtde-aulas">
+                        <label for="quantidade_aulas" class="form-label" id="label-qtde-aulas">Quantidade de Aulas Faltadas</label>
+                        <input type="number" class="form-control" name="quantidade_aulas" id="quantidade_aulas" min="1" max="20" required>
+                    </div>
+
+                    <div class="mb-3" id="div-anexo" style="display: none;">
+                        <label for="anexo" class="form-label">Anexar Comprovante (Lista)</label>
+                        <input type="file" class="form-control form-control-sm" name="anexo" id="anexo" accept=".pdf,.jpg,.jpeg,.png">
+                        <small class="text-muted">PDF ou Imagem (Opcional)</small>
+                    </div>
+
+                    <div class="mb-4" id="div-descricao">
+                        <label for="descricao" class="form-label">Descrição / Motivo <span class="text-muted small" id="desc-opcional">(Opcional para Falta)</span></label>
+                        <textarea class="form-control" name="descricao" id="descricao" rows="3"></textarea>
+                    </div>
+
+                    <div class="row g-3 mb-4 align-items-start border rounded p-2 mx-0 bg-white shadow-sm">
+                        <div class="col-md-3">
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" role="switch" id="is_restrito" name="is_restrito">
+                                <label class="form-check-label text-warning fw-bold" for="is_restrito">
+                                    🔒 Restrito
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-2" style="font-size: 0.70rem;">Oculta registro de outros usuários.</small>
+                        </div>
+                        <div class="col-md-9" id="div-usuarios-permitidos" style="display: none;">
+                            <label class="form-label small fw-bold mb-1">Usuários Autorizados</label>
+                            <div class="border rounded p-2 overflow-auto bg-light" style="max-height: 150px;">
+                                {% for u in usuarios_sistema %}
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" name="usuarios_permitidos" value="{{ u.id }}" id="user_{{ u.id }}">
+                                    <label class="form-check-label small" for="user_{{ u.id }}">
+                                        {{ u.full_name }} <span class="text-muted">(@{{ u.username }})</span>
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Salvar Evento</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal Novo Professor -->
+<div class="modal fade" id="modalNovoProfessor" tabindex="-1" aria-labelledby="modalNovoProfessorLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="{{ url_for('professores_novo') }}" method="POST">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5" id="modalNovoProfessorLabel">Cadastrar Professor</h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+                <label for="novo_nome" class="form-label">Nome Completo</label>
+                <input type="text" class="form-control" name="nome" id="novo_nome" required>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-success">Salvar Professor</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputName = document.getElementById('professor_name');
+        const inputHidden = document.getElementById('professor_id_hidden');
+        const autocompleteList = document.getElementById('autocomplete-list');
+        const items = document.querySelectorAll('.autocomplete-item');
+
+        if (inputName && autocompleteList) {
+            // Function to filter dropdown items
+            function filterList(val) {
+                let hasMatch = false;
+                const lowerVal = val.toLowerCase();
+                items.forEach(item => {
+                    if (item.getAttribute('data-name').toLowerCase().includes(lowerVal)) {
+                        item.style.display = 'block';
+                        hasMatch = true;
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+                autocompleteList.style.display = hasMatch ? 'block' : 'none';
+            }
+
+            // Show list and filter on input and focus
+            inputName.addEventListener('input', function() {
+                inputHidden.value = ''; // Reset ID while typing
+                filterList(this.value);
+            });
+            inputName.addEventListener('focus', function() {
+                filterList(this.value);
+            });
+
+            // Hide list when clicking outside
+            document.addEventListener('click', function(e) {
+                if (e.target !== inputName && !autocompleteList.contains(e.target)) {
+                    autocompleteList.style.display = 'none';
+                }
+            });
+
+            // Handle option click
+            items.forEach(item => {
+                item.addEventListener('click', function() {
+                    inputName.value = this.getAttribute('data-name');
+                    inputHidden.value = this.getAttribute('data-id');
+                    autocompleteList.style.display = 'none';
+                    inputName.closest('form').submit(); // Submits right away
+                });
+            });
+        }
+
+        // Default to today for data_evento
+        const dataInput = document.getElementById('data_evento');
+        if (dataInput && !dataInput.value) {
+            dataInput.value = new Date().toISOString().split('T')[0];
+        }
+
+        // Toggle required fields based on Event Type
+        const radiotypes = document.querySelectorAll('input[name="tipo_evento"]');
+        const divQtdeAulas = document.getElementById('div-qtde-aulas');
+        const inputQtde = document.getElementById('quantidade_aulas');
+        const inputDesc = document.getElementById('descricao');
+        const descOpcionalText = document.getElementById('desc-opcional');
+
+        function toggleFields() {
+            let selectedRadio = document.querySelector('input[name="tipo_evento"]:checked');
+            if(!selectedRadio) return;
+            let selectedType = selectedRadio.value;
+            let divAnexo = document.getElementById('div-anexo');
+            
+            if (selectedType === 'Falta') {
+                divQtdeAulas.style.display = 'block';
+                if(divAnexo) divAnexo.style.display = 'none';
+                inputQtde.required = true;
+                inputDesc.required = false;
+                descOpcionalText.textContent = "(Opcional para Falta)";
+                document.getElementById('label-qtde-aulas').textContent = 'Quantidade de Aulas Faltadas';
+            } else if (selectedType === 'Reposição') {
+                divQtdeAulas.style.display = 'block';
+                if(divAnexo) divAnexo.style.display = 'block';
+                inputQtde.required = true;
+                inputDesc.required = false;
+                descOpcionalText.textContent = "(Opcional para Reposição)";
+                document.getElementById('label-qtde-aulas').textContent = 'Quantidade de Aulas Repostas';
+            } else {
+                divQtdeAulas.style.display = 'none';
+                if(divAnexo) divAnexo.style.display = 'none';
+                inputQtde.required = false;
+                inputQtde.value = ''; // clear
+                inputDesc.required = true;
+                descOpcionalText.textContent = "(Obrigatório)";
+            }
+        }
+        
+        // Listeners fixos
+        const checkRestrito = document.getElementById('is_restrito');
+        const divUsuarios = document.getElementById('div-usuarios-permitidos');
+        
+        if(checkRestrito && divUsuarios) {
+            checkRestrito.addEventListener('change', function() {
+                if(this.checked) {
+                    divUsuarios.style.display = 'block';
+                } else {
+                    divUsuarios.style.display = 'none';
+                    const checkboxes = divUsuarios.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(chk => chk.checked = false);
+                }
+            });
+        }
+
+        if (radiotypes.length > 0) {
+            radiotypes.forEach(radio => radio.addEventListener('change', toggleFields));
+            toggleFields(); // run on load
+        }
+    });
+</script>
+{% endblock %}

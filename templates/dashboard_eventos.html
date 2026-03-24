@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Dashboard de Eventos - Painel Pedagógico{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <h1 class="h3 mb-0">Dashboard de Eventos <span class="text-muted fs-5">({{ ano_selecionado }})</span></h1>
+    <div>
+        <a href="{{ url_for('notificacoes') }}" class="btn btn-outline-primary btn-sm me-2">Reg. Alunos (Notificações)</a>
+        <a href="{{ url_for('professores') }}" class="btn btn-outline-primary btn-sm">Reg. Professores</a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 mb-3 mb-md-0">
+        <div class="card bg-primary text-white h-100 shadow border-0">
+            <div class="card-body">
+                <h5 class="card-title text-white-50">Total Eventos de Alunos</h5>
+                <h2 class="display-5 mb-0">{{ eventos_alunos_ano }}</h2>
+                <small>No ano letivo {{ ano_selecionado }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-info text-white h-100 shadow border-0">
+            <div class="card-body">
+                <h5 class="card-title text-white-50">Total Eventos de Professores</h5>
+                <h2 class="display-5 mb-0">{{ eventos_prof_ano }}</h2>
+                <small>Eventos no ano de {{ ano_selecionado }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- Top Alunos -->
+    <div class="col-lg-6 mb-4 mb-lg-0">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Alunos com Mais Eventos</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 text-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Aluno</th>
+                                <th>Turma</th>
+                                <th>Total de Eventos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nome, matricula, turma_nome, turma_per, total in top_alunos %}
+                            <tr>
+                                <td><a href="{{ url_for('notificacoes', aluno_matricula=matricula) }}" class="text-decoration-none">{{ nome }}</a></td>
+                                <td>{{ turma_nome }} ({{ turma_per }})</td>
+                                <td><span class="badge text-bg-warning">{{ total }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-3">Nenhum evento letivo registrado</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Professores (Saldo Negativo/Positivo) -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Professores e Saldo de Aulas</h5>
+                <small class="text-muted">Apresenta Faltas, Reposições e Saldo final</small>
+            </div>
+            <div class="card-body p-0" style="max-height: 300px; overflow-y: auto;">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 text-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Professor</th>
+                                <th>Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in professores_stats %}
+                            <tr>
+                                <td><a href="{{ url_for('professores', professor_id=p.id) }}" class="text-decoration-none">{{ p.nome }}</a></td>
+                                <td>
+                                    <span class="badge {% if p.saldo > 0 %}text-bg-success{% elif p.saldo < 0 %}text-bg-danger{% else %}text-bg-secondary{% endif %}">
+                                        {{ p.saldo }}
+                                    </span>
+                                    <small class="text-muted d-block" style="font-size: 0.7rem;">
+                                        {{ p.faltas }} faltas, {{ p.reposicoes }} reposições
+                                    </small>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted py-3">Nenhum registro de falta/reposição no ano</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Últimos Eventos Alunos -->
+    <div class="col-lg-6 mb-4 mb-lg-0">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white text-muted">
+                <strong>Últimos Eventos: Alunos</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for ev, al, tn in recentes_alunos %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1"><a href="{{ url_for('notificacoes', aluno_matricula=al.matricula) }}" class="text-decoration-none">{{ al.nome }}</a></h6>
+                            <small class="text-muted">{{ ev.created_at.strftime('%d/%m/%Y') }}</small>
+                        </div>
+                        <p class="mb-1 small">{{ ev.descricao[:80] }}{% if ev.descricao|length > 80 %}...{% endif %}</p>
+                        <small class="text-muted">
+                            <span class="badge {% if ev.gravidade == 'Grave' %}text-bg-danger{% elif ev.gravidade == 'Média' %}text-bg-warning{% else %}text-bg-info{% endif %}">{{ ev.gravidade }}</span> 
+                            | Turma: {{ tn.nome }}
+                        </small>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center text-muted py-3">Nenhum evento recente</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimos Eventos Professores -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white text-muted">
+                <strong>Últimos Eventos: Professores</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for ev in recentes_prof %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1"><a href="{{ url_for('professores', professor_id=ev.professor.id) }}" class="text-decoration-none">{{ ev.professor.nome }}</a></h6>
+                            <small class="text-muted">{{ ev.data_evento.strftime('%d/%m/%Y') }}</small>
+                        </div>
+                        <p class="mb-1 small">
+                            <span class="badge {% if ev.tipo_evento == 'Falta' %}text-bg-danger{% elif ev.tipo_evento == 'Reposição' %}text-bg-success{% else %}text-bg-secondary{% endif %} me-1">
+                                {{ ev.tipo_evento }} {% if ev.quantidade_aulas %}({{ ev.quantidade_aulas }} aulas){% endif %}
+                            </span>
+                            {{ ev.descricao or '' }}
+                        </p>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center text-muted py-3">Nenhum evento recente</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

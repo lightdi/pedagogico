@@ -11,6 +11,9 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('dashboard') }}">Painel Pedagogico</a>
+            <div class="me-auto">
+                <a class="btn btn-sm btn-outline-light" href="{{ url_for('horarios') }}">Horários das Turmas</a>
+            </div>
             {% if current_user.is_authenticated %}
             <div class="d-flex align-items-center gap-2 gap-lg-3 flex-wrap justify-content-end">
                 <label class="d-flex align-items-center gap-1 text-white-50 small mb-0">
@@ -47,7 +50,13 @@
                         <li><a class="dropdown-item" href="{{ url_for('logs') }}">Logs</a></li>
                     </ul>
                 </div>
-                <a class="btn btn-sm btn-outline-light" href="{{ url_for('importar_boletim') }}">Importar Boletim</a>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Importar</button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('importar_boletim') }}">Importar Boletim</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('importar_horarios') }}">Importar Horários (XML)</a></li>
+                    </ul>
+                </div>
                 {% endif %}
                 <a class="btn btn-sm btn-warning" href="{{ url_for('logout') }}">Sair</a>
             </div>

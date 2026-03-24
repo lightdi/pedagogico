@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>Horários das Turmas</h2>
+            <p class="text-muted">Selecione uma turma abaixo para visualizar o cronograma de aulas extraído do aSc Timetables.</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="form-group mb-0">
+                <label for="turmaSelect" class="form-label font-weight-bold">Selecione a Turma:</label>
+                <select id="turmaSelect" class="form-control form-select" onchange="mostrarHorario(this.value)">
+                    <option value="" disabled selected>-- Escolha a visualização --</option>
+                    <option value="todos">Mostrar Todas as Turmas</option>
+                    {% for turma in turmas %}
+                        <option value="{{ turma.id }}">{{ turma.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container dos Horários -->
+    <div id="horariosContainer">
+        {% for turma in turmas %}
+            <div id="horario-{{ turma.id }}" class="card shadow-sm mb-5 d-none horario-card">
+                <div class="card-header bg-light text-dark">
+                    <h4 class="mb-0">Horário: {{ turma.name }}</h4>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped text-center mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th style="width: 10%;">Período</th>
+                                    {% for day_binary, day_name in ordered_days %}
+                                        <th>{{ day_name }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p_id, p_info in ordered_periods %}
+                                    <tr>
+                                        <td class="align-middle">
+                                            <strong>{{ p_info.name }}º</strong><br>
+                                            <small class="text-muted">{{ p_info.starttime }} - {{ p_info.endtime }}</small>
+                                        </td>
+                                        {% for day_binary, day_name in ordered_days %}
+                                            <td class="align-middle">
+                                                {% set aula = grades.get(turma.id, {}).get(day_binary, {}).get(p_id) %}
+                                                {% if aula %}
+                                                    <div class="font-weight-bold text-dark">{{ aula.subject }}</div>
+                                                    <div class="small text-muted">{{ aula.teacher }}</div>
+                                                {% else %}
+                                                    <span class="text-black-50">-</span>
+                                                {% endif %}
+                                            </td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    function mostrarHorario(turmaId) {
+        if (turmaId === 'todos') {
+            document.querySelectorAll('.horario-card').forEach(function(card) {
+                card.classList.remove('d-none');
+            });
+            return;
+        }
+        
+        // Esconder todos
+        document.querySelectorAll('.horario-card').forEach(function(card) {
+            card.classList.add('d-none');
+        });
+        
+        // Mostrar o selecionado
+        if (turmaId) {
+            var selected = document.getElementById('horario-' + turmaId);
+            if (selected) {
+                selected.classList.remove('d-none');
+            }
+        }
+    }
+</script>
+{% endblock %}

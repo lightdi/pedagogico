@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <h2 class="mb-4">Importar Horários (XML aSc Timetables)</h2>
+        
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <p>Por favor, selecione o arquivo XML exportado através do aSc Timetables para atualizar a grade de horários de todas as turmas exibidas no sistema.</p>
+                <p class="text-muted small mb-4"><strong>Aviso:</strong> Professores que constarem no XML enviado e que ainda não existirem na base de dados serão criados automaticamente neste processo.</p>
+                
+                <form action="{{ url_for('importar_horarios') }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <label for="arquivo_xml" class="form-label font-weight-bold">Arquivo XML de Horários:</label>
+                        <input class="form-control" type="file" id="arquivo_xml" name="arquivo_xml" accept=".xml" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Fazer Upload e Importar</button>
+                    <a href="{{ url_for('horarios') }}" class="btn btn-outline-secondary w-100 mt-2">Cancelar / Ver Grade Atual</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

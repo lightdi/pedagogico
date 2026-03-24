@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import Optional
@@ -1995,6 +1996,186 @@ def professores_eventos_novo():
     register_action("NOVO_EVENTO_PROFESSOR", f"Evento de '{tipo_evento}' registrado para professor ID {professor_id}.")
     
     return redirect(url_for("professores", professor_id=professor_id))
+
+
+@app.route("/horarios", methods=["GET"])
+def horarios():
+    xml_path = os.path.join(app.root_path, "static", "uploads", "horarios_atual.xml")
+    if not os.path.exists(xml_path):
+        # Fallback para o arquivo antigo caso exista
+        xml_path = os.path.join(app.root_path, "asctt2012.xml")
+        if not os.path.exists(xml_path):
+            flash("Nenhum arquivo de horários foi importado ainda.", "warning")
+            if current_user.is_authenticated:
+                return redirect(url_for("importar_horarios"))
+            return render_template("horarios.html", turmas=[], grades={}, ordered_days=[], ordered_periods=[])
+        
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+    except Exception as e:
+        flash(f"Erro ao ler os horários: {e}", "danger")
+        return redirect(url_for("dashboard"))
+        
+    # Extrair dados do XML
+    subjects = {e.get("id"): e.get("name") for e in root.findall(".//subjects/subject")}
+    classes = {e.get("id"): e.get("name") for e in root.findall(".//classes/class")}
+    
+    periods = {}
+    for elem in root.findall(".//periods/period"):
+        periods[elem.get("period")] = {
+            "name": elem.get("name"),
+            "starttime": elem.get("starttime"),
+            "endtime": elem.get("endtime")
+        }
+        
+    teachers = {}
+    xml_professores = set()
+    for elem in root.findall(".//teachers/teacher"):
+        tid = elem.get("id")
+        tname = elem.get("short") or elem.get("firstname") or elem.get("name")
+        if tname:
+            tname = tname.strip()
+            teachers[tid] = tname
+            xml_professores.add(tname)
+            
+    # Sync professores
+    if xml_professores:
+        existentes = {p.nome for p in Professor.query.all()}
+        novos = xml_professores - existentes
+        if novos:
+            try:
+                for nome in novos:
+                    db.session.add(Professor(nome=nome))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                flash("Erro ao sincronizar professores.", "danger")
+
+    lessons = {}
+    for elem in root.findall(".//lessons/lesson"):
+        lid = elem.get("id")
+        class_ids = elem.get("classids", "").split(",")
+        subject_id = elem.get("subjectid")
+        teacher_ids = elem.get("teacherids", "").split(",")
+        
+        subj_name = subjects.get(subject_id, "Desconhecido")
+        t_names = [teachers.get(tid, "") for tid in teacher_ids if tid in teachers]
+        t_names_str = ", ".join(t_names) if t_names else "Sem Professor"
+        
+        lessons[lid] = {
+            "subject": subj_name,
+            "teacher": t_names_str,
+            "classes": class_ids
+        }
+        
+    # grades[class_id][day][period] = {'subject': ..., 'teacher': ...}
+    grades = {}
+    for elem in root.findall(".//cards/card"):
+        lessonid = elem.get("lessonid")
+        period = elem.get("period")
+        days = elem.get("days")
+        if lessonid in lessons:
+            lesson = lessons[lessonid]
+            for cid in lesson["classes"]:
+                if cid not in grades:
+                    grades[cid] = {}
+                if days not in grades[cid]:
+                    grades[cid][days] = {}
+                grades[cid][days][period] = {
+                    "subject": lesson["subject"],
+                    "teacher": lesson["teacher"]
+                }
+                
+    turmas_list = [{"id": cid, "name": cname} for cid, cname in classes.items()]
+    turmas_list.sort(key=lambda x: x["name"])
+    
+    ordered_days = [
+        ("10000", "Segunda"),
+        ("01000", "Terça"),
+        ("00100", "Quarta"),
+        ("00010", "Quinta"),
+        ("00001", "Sexta")
+    ]
+    
+    ordered_periods_list = []
+    for p_id, p_info in periods.items():
+        try:
+            srt = int(p_id)
+        except ValueError:
+            srt = 999
+        ordered_periods_list.append((srt, p_id, p_info))
+    ordered_periods_list.sort(key=lambda x: x[0])
+    ordered_periods = [(x[1], x[2]) for x in ordered_periods_list]
+    
+    return render_template(
+        "horarios.html",
+        turmas=turmas_list,
+        grades=grades,
+        ordered_days=ordered_days,
+        ordered_periods=ordered_periods
+    )
+
+
+@app.route("/importar_horarios", methods=["GET", "POST"])
+@admin_required
+def importar_horarios():
+    if request.method == "POST":
+        arquivo_xml = request.files.get("arquivo_xml")
+        if not arquivo_xml or not arquivo_xml.filename:
+            flash("Selecione um arquivo XML válido.", "warning")
+            return redirect(url_for("importar_horarios"))
+            
+        if not arquivo_xml.filename.lower().endswith(".xml"):
+            flash("Arquivo inválido. Por favor envie um arquivo com extensão .xml (aSc Timetables).", "danger")
+            return redirect(url_for("importar_horarios"))
+            
+        import os
+        upload_dir = os.path.join(app.root_path, "static", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        salvar_em = os.path.join(upload_dir, "horarios_atual.xml")
+        
+        try:
+            arquivo_xml.save(salvar_em)
+        except Exception as e:
+            flash(f"Erro ao salvar arquivo: {e}", "danger")
+            return redirect(url_for("importar_horarios"))
+        
+        try:
+            tree = ET.parse(salvar_em)
+            root = tree.getroot()
+            
+            xml_professores = set()
+            for elem in root.findall(".//teachers/teacher"):
+                tname = elem.get("short") or elem.get("firstname") or elem.get("name")
+                if tname:
+                    xml_professores.add(tname.strip())
+                    
+            if xml_professores:
+                existentes = {p.nome for p in Professor.query.all()}
+                novos = xml_professores - existentes
+                if novos:
+                    for nome in novos:
+                        db.session.add(Professor(nome=nome))
+                    db.session.commit()
+                    flash(f"Horários do arquivo importados com sucesso! {len(novos)} novos professores foram adicionados.", "success")
+                else:
+                    flash("Horários do arquivo importados com sucesso! Nenhuma atualização de professores necessária.", "success")
+            else:
+                flash("Arquivo de horários importado e validado com sucesso.", "success")
+                
+            register_action("IMPORT_HORARIOS", "Arquivo XML de horários foi importado.")
+            
+            return redirect(url_for("horarios"))
+            
+        except ET.ParseError:
+            flash("O arquivo XML encontra-se corrompido ou mal formatado. O processamento foi abortado.", "danger")
+            return redirect(url_for("importar_horarios"))
+        except Exception as e:
+            flash(f"Ocorreu um erro no parsing do arquivo: {e}", "danger")
+            return redirect(url_for("importar_horarios"))
+            
+    return render_template("importar_horarios.html")
 
 
 @app.errorhandler(403)

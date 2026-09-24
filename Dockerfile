@@ -14,6 +14,6 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 
-EXPOSE 5000
+EXPOSE 5023
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5023", "--workers", "1", "--threads", "4", "app:app"]

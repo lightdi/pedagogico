@@ -11,6 +11,9 @@ services:
       - PROXY_FIX=1
       - GENERIC_TIMEZONE=America/Fortaleza
 
+    ports:
+      - "5010:5000"
+      
     volumes:
       - pedagogico_data:/app/data
 

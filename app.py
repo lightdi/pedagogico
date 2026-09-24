@@ -38,19 +38,19 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Suporte a subcaminho (ex.: /pedagogico) atras do Traefik com stripprefix
-_application_root = os.environ.get("APPLICATION_ROOT", "").rstrip("/")
-if _application_root:
+#_application_root = os.environ.get("APPLICATION_ROOT", "").rstrip("/")
+#if _application_root:
 
-    class ScriptNameFix:
-        def __init__(self, app, script_name):
-            self.app = app
-            self.script_name = script_name
+#    class ScriptNameFix:
+##        def __init__(self, app, script_name):
+ #           self.app = app
+ #           self.script_name = script_name
 
-        def __call__(self, environ, start_response):
-            environ["SCRIPT_NAME"] = self.script_name
-            return self.app(environ, start_response)
+  #      def __call__(self, environ, start_response):
+  ##          environ["SCRIPT_NAME"] = self.script_name
+   #         return self.app(environ, start_response)
 
-    app.wsgi_app = ScriptNameFix(app.wsgi_app, _application_root)
+    #app.wsgi_app = ScriptNameFix(app.wsgi_app, _application_root)
 
 
 db = SQLAlchemy(app)
